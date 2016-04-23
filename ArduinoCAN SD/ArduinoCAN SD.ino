@@ -1,3 +1,30 @@
+/*
+ArduinoCan_SD.ino
+
+WURacing Electronics Team Spring 2016
+
+The purpose of this code is to read packets coming from our AEM Infinity ECU over the
+AEMNet protocol and write it over XBee to a computer in the Pit. Hardware-wise, we are 
+using an Arduino UNO, the SparkFun CAN-Bus Shield, a pair of XBee radios, and a 
+custom-made dashboard. The dashboard contains a bunch of LEDs for our RPM display, an
+OLED for whatever you want (we are using it to display the numeric RPM), and a check engine
+light. We are also using a custom connector that takes the four wires from
+the AEMNet connector and maps them to a DB9 connector to connect to our CAN-Bus Shield.
+
+Be aware that to read the XBee stream, we wrote our own reader on the computer side which
+displays our data in real-time and writes it to a CSV. Because our ECU writes data over in 
+packets, we left most of the sorting to our Python application, which reads the data in 
+and organizes it before saving it.
+
+We have updated the code to store a backup of the data to a Micro-SD card in case the stream
+is disrupted. This requires no extra hardware as the SparkFun CAN-Bus Shield has a built-in
+Micro-SD card reader.
+
+Many of the libraries have been adapted to work with AEMNet, which varies slightly from the
+CAN-Bus standard.
+*/
+
+
 #include "Canbus.h"  // don't forget to include these
 #include "defaults.h"
 #include "global.h"
@@ -12,7 +39,7 @@
 #include <SPI.h>
 #include <Wire.h>
 #include <SD.h>
-#include "QueueList.h"
+#include <QueueList.h>
 //#include <Adafruit_GFX.h>
 //#include <Adafruit_SSD1306.h>
 
@@ -80,9 +107,11 @@ bytes 6 and 7 --> battery voltage --> .0002455 V/bit
 
 // Chip Select pin is tied to pin 9 on the SparkFun CAN-Bus Shield
 const int chipSelect = 9;
-
+// filename is for the backup log on the Arduino
 const char* filename = "CANLog.csv";
 
+// These correspond to the AEMNet Message IDs. If you don't know what these are,
+// AEM provides documentation on their website.
 const int MESSAGE_ONE = 4294942720;
 const int MESSAGE_TWO = 4294942721;
 const int MESSAGE_THREE = 4294942722;
@@ -98,6 +127,8 @@ const float IGN_SCALE = .35156;
 const float BATT_VOLTAGE_SCALE = .0002455;
 
 const int rpmDeltaTime = 250;
+
+// Defines how much we want to update our OLED display.
 unsigned long rpmLoopEndTime = 6000;
 
 double rpm;
@@ -107,13 +138,13 @@ double vehicleSpeed;
 byte gear;
 double volts;
 
-
 #define rxPinXBee 2
 #define txPinXBee 3
 
 SoftwareSerial XBee(rxPinXBee, txPinXBee);
 PacketSender toRadio(XBee);
 
+// For the QueueList buffers, read more below.
 QueueList<uint16_t> rpmList;
 QueueList<uint16_t> loadList;
 QueueList<uint16_t> coolantList;
@@ -147,10 +178,8 @@ void setup() {
   if (!SD.begin(chipSelect)) {
     Serial.println("Card failed, or not present");
     // don't do anything more:
-    return;
-  }
-  Serial.println("card initialized.");
-
+  } else
+    Serial.println("card initialized.");
   delay(500);
 
   /*display.begin(SSD1306_SWITCHCAPVCC, 0x3C);  // initialize with the I2C addr 0x3D (for the 128x64)
@@ -165,9 +194,6 @@ void setup() {
 
 }
 
-
-
-
 void loop() {
 
   if (millis() > rpmLoopEndTime) {
@@ -180,18 +206,19 @@ void loop() {
     rpmLoopEndTime += rpmDeltaTime;*/
   }
 
-// open the file. note that only one file can be open at a time,
-// so you have to close this one before opening another.
-// this opens the file and appends to the end of file
-// if the file does not exist, this will create a new file.
   tCAN message;
 
+  /* 
+  This section of the code reads messages in from the ECU and writes them to the
+  XBee stream, as well as to the QueueLists.
+  */
   if (mcp2515_check_message()) {
     if (mcp2515_get_message(&message)) {
 
       switch (message.id) {
 
-      case MESSAGE_ONE: {
+      case MESSAGE_ONE: 
+      {
         uint16_t rawRPM = (uint16_t)message.data[0] << 8;
         rawRPM |= message.data[1];
         rpm = rawRPM * RPM_SCALE;
@@ -210,11 +237,11 @@ void loop() {
 
         toRadio.logCoolant(coolant);
         coolantList.push(coolant);
-
         break;
       }
 
-      case MESSAGE_FOUR: {
+      case MESSAGE_FOUR: 
+      {
         uint16_t rawSpeed = (uint16_t)message.data[2] << 8;
         rawSpeed |= message.data[3];
         vehicleSpeed = rawSpeed * SPEED_SCALE;
@@ -236,13 +263,20 @@ void loop() {
         break;
       }
 
-      default: {
+      default: 
+      {
         break;
       }
-
       }
     }
   }
+
+  /*
+  This next part of the code will check all of the QueueLists to see which has the least number
+  of entries. It will then record that many entries to the CSV file on the SD card. Because the
+  same number of each packet should come in over time, no individual QueueList should get very
+  long.
+  */
   uint16_t counter = rpmList.count();
   if (counter > loadList.count()) counter = loadList.count();
   if (counter > coolantList.count()) counter = coolantList.count();
@@ -250,10 +284,16 @@ void loop() {
   if (counter > gearList.count()) counter = gearList.count();
   if (counter > voltsList.count()) counter = voltsList.count();
 
+  // open the file. note that only one file can be open at a time,
+  // so you have to close this one before opening another.
+  // this opens the file and appends to the end of file
+  // if the file does not exist, this will create a new file.
   String dataString = "";
   for (int i = 0; i < counter; i++) {
     File dataFile = SD.open(filename, FILE_WRITE);
     if (dataFile) {
+      dataString += millis();
+      dataString += ",";
       dataString += rpmList.pop();
       dataString += ",";
       dataString += loadList.pop();
@@ -270,21 +310,3 @@ void loop() {
     }
   }
 }
-
-void StringToCard(File dataFile, char* c) {
-  if (dataFile) {
-    dataFile.print(c);
-  }
-}
-
-void IntToCard(File dataFile, uint16_t i) {
-  char* c = "";
-  c += i;
-  StringToCard(dataFile, c);
-}
-
-
-
-
-
-
