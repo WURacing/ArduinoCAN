@@ -1,3 +1,24 @@
+#include <Wire.h>
+#include <SPI.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1305.h>
+
+// Used for software SPI
+#define OLED_CLK 13
+#define OLED_MOSI 11
+
+// Used for software or hardware SPI
+#define OLED_CS 10
+#define OLED_DC 8
+
+// Used for I2C or SPI
+#define OLED_RESET 9
+
+// software SPI
+//Adafruit_SSD1305 display(OLED_MOSI, OLED_CLK, OLED_DC, OLED_RESET, OLED_CS);
+// hardware SPI
+Adafruit_SSD1305 display(OLED_DC, OLED_RESET, OLED_CS);
+
 #include "Canbus.h"  // don't forget to include these
 #include "defaults.h"
 #include "global.h"
@@ -5,22 +26,19 @@
 #include "mcp2515_defs.h"
 #include "stdlib.h"
 
+#include <math.h>
+
 #include <SoftwareSerial.h>
 #include "PacketSender.h"
 
 
 #include <SPI.h>
 #include <Wire.h>
-//#include <Adafruit_GFX.h>
-//#include <Adafruit_SSD1306.h>
 
-//#define OLED_RESET 4
-//Adafruit_SSD1306 display(OLED_RESET);
-
-//#define LOGO16_GLCD_HEIGHT 16 
-//#define LOGO16_GLCD_WIDTH  16 
-//static const unsigned char PROGMEM logo16_glcd_bmp[] =
-/*{ B00000000, B11000000,
+#define LOGO16_GLCD_HEIGHT 16 
+#define LOGO16_GLCD_WIDTH  16 
+static const unsigned char PROGMEM logo16_glcd_bmp[] =
+{ B00000000, B11000000,
   B00000001, B11000000,
   B00000001, B11000000,
   B00000011, B11100000,
@@ -35,13 +53,7 @@
   B00111111, B11110000,
   B01111100, B11110000,
   B01110000, B01110000,
-  B00000000, B00110000 };*/
-
-
-
-//#if (SSD1306_LCDHEIGHT != 64)
-//#error("Height incorrect, please fix Adafruit_SSD1306.h!");
-//#endif
+  B00000000, B00110000 };
 
 
 /* MESSAGE IDS:
@@ -83,8 +95,10 @@ const float SPEED_SCALE = .00390625;
 const float IGN_SCALE = .35156;
 const float BATT_VOLTAGE_SCALE = .0002455;
 
-const int rpmDeltaTime = 250;
-unsigned long rpmLoopEndTime = 6000;
+const int displayDeltaTime = 250;
+unsigned long displayLoopEndTime = 6000;
+
+unsigned long loopEndTime = 1000;
 
 double rpm;
 double load;
@@ -92,6 +106,11 @@ int8_t coolant;
 double vehicleSpeed;
 byte gear;
 double volts;
+
+boolean warning = false;
+
+#define OVERHEATING 93
+#define REDLINE 12000
 
 
 #define rxPinXBee 2
@@ -122,31 +141,67 @@ void setup(){
 
   delay(500);
 
-  /*display.begin(SSD1306_SWITCHCAPVCC, 0x3C);  // initialize with the I2C addr 0x3D (for the 128x64)
-    // init done
-  
-    // Show image buffer on the display hardware.
-    // Since the buffer is intialized with an Adafruit splashscreen
-    // internally, this will display the splashscreen.
-    display.display();
-    delay(6000);
-    display.clearDisplay();*/
+  display.begin();
+  display.display();
+  delay(1000);
 
 }
 
 
 
 
+
+
 void loop(){ 
 
-if (millis() > rpmLoopEndTime){
-  /*display.clearDisplay();
-  display.setTextSize(4);
+if (millis() > displayLoopEndTime){
+  display.clearDisplay();
+  
+  display.setTextSize(2);
   display.setTextColor(WHITE);
-  display.setCursor(0,15);
-  display.println((int)rpm);
+
+  display.setCursor(0,0);
+  display.print((long)rpm);
+  display.setTextSize(1);
+  display.println("rpm");
+
+  
+  display.setCursor(0, 20);
+  display.println("Gear:");
+  display.setCursor(0,28);
+  display.setTextSize(2);
+  display.println(gear);
+  
+
+  display.setCursor(115, 50);
+  display.print("C");
+
+  display.drawCircle(110, 50, 2, WHITE);
+
+  if (coolant >= OVERHEATING || rpm >= REDLINE){
+    warning =  !(warning);
+  }
+  else if (warning){
+    warning = false;
+  }
+
+  if (warning){
+    display.setCursor(0, 50);
+    display.setTextSize(2);
+    display.print("WARNING");
+  }
+  
+  int digits = (int) (log10(abs(coolant)));
+  
+  display.setTextSize(2);
+  display.setCursor(96 - 11 * digits, 50);
+  display.print(coolant);
+  
   display.display();
-  rpmLoopEndTime += rpmDeltaTime;*/
+
+  
+  
+  displayLoopEndTime += displayDeltaTime;
 }
 
 tCAN message;
@@ -200,10 +255,20 @@ tCAN message;
          }
 
       } 
-    }   
+    }
+  }
+  else{
+    Serial.println("No data");   
   }
 
-
+  
+  
+  if (millis() > loopEndTime){
+    ++coolant;
+    ++gear;
+    rpm += 500;
+    loopEndTime += 1000;
+  }
 
 
 
