@@ -26,6 +26,8 @@ Adafruit_SSD1305 display(OLED_DC, OLED_RESET, OLED_CS);
 #include "mcp2515_defs.h"
 #include "stdlib.h"
 
+#include <math.h>
+
 #include <SoftwareSerial.h>
 #include "PacketSender.h"
 
@@ -93,8 +95,10 @@ const float SPEED_SCALE = .00390625;
 const float IGN_SCALE = .35156;
 const float BATT_VOLTAGE_SCALE = .0002455;
 
-const int rpmDeltaTime = 250;
-unsigned long rpmLoopEndTime = 6000;
+const int displayDeltaTime = 250;
+unsigned long displayLoopEndTime = 6000;
+
+unsigned long loopEndTime = 1000;
 
 double rpm;
 double load;
@@ -102,6 +106,11 @@ int8_t coolant;
 double vehicleSpeed;
 byte gear;
 double volts;
+
+boolean warning = false;
+
+#define OVERHEATING 93
+#define REDLINE 12000
 
 
 #define rxPinXBee 2
@@ -145,21 +154,54 @@ void setup(){
 
 void loop(){ 
 
-if (millis() > rpmLoopEndTime){
+if (millis() > displayLoopEndTime){
   display.clearDisplay();
+  
   display.setTextSize(2);
   display.setTextColor(WHITE);
+
   display.setCursor(0,0);
-  display.print((int)rpm);
+  display.print((long)rpm);
   display.setTextSize(1);
   display.println("rpm");
+
+  
   display.setCursor(0, 20);
   display.println("Gear:");
   display.setCursor(0,28);
   display.setTextSize(2);
   display.println(gear);
+  
+
+  display.setCursor(115, 50);
+  display.print("C");
+
+  display.drawCircle(110, 50, 2, WHITE);
+
+  if (coolant >= OVERHEATING || rpm >= REDLINE){
+    warning =  !(warning);
+  }
+  else if (warning){
+    warning = false;
+  }
+
+  if (warning){
+    display.setCursor(0, 50);
+    display.setTextSize(2);
+    display.print("WARNING");
+  }
+  
+  int digits = (int) (log10(abs(coolant)));
+  
+  display.setTextSize(2);
+  display.setCursor(96 - 11 * digits, 50);
+  display.print(coolant);
+  
   display.display();
-  rpmLoopEndTime += rpmDeltaTime;
+
+  
+  
+  displayLoopEndTime += displayDeltaTime;
 }
 
 tCAN message;
@@ -220,8 +262,13 @@ tCAN message;
   }
 
   
-
-
+  
+  if (millis() > loopEndTime){
+    ++coolant;
+    ++gear;
+    rpm += 500;
+    loopEndTime += 1000;
+  }
 
 
 
