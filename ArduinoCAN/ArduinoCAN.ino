@@ -9,7 +9,7 @@
 
 // Used for software or hardware SPI
 #define OLED_CS 10
-#define OLED_DC 8
+#define OLED_DC 6
 
 // Used for I2C or SPI
 #define OLED_RESET 9
@@ -35,8 +35,8 @@ Adafruit_SSD1305 display(OLED_DC, OLED_RESET, OLED_CS);
 #include <SPI.h>
 #include <Wire.h>
 
-#define LOGO16_GLCD_HEIGHT 16 
-#define LOGO16_GLCD_WIDTH  16 
+#define LOGO16_GLCD_HEIGHT 64
+#define LOGO16_GLCD_WIDTH  128
 static const unsigned char PROGMEM logo16_glcd_bmp[] =
 { B00000000, B11000000,
   B00000001, B11000000,
@@ -53,7 +53,8 @@ static const unsigned char PROGMEM logo16_glcd_bmp[] =
   B00111111, B11110000,
   B01111100, B11110000,
   B01110000, B01110000,
-  B00000000, B00110000 };
+  B00000000, B00110000
+};
 
 
 /* MESSAGE IDS:
@@ -74,14 +75,14 @@ same as message two
 MESSAGE_FOUR:
 byte 0 --> O2 sensor 1 --> .00390625 lambda / bit
 byte 1 --> O2 sensor 2 --> .00390625 lambda / bit
-bytes 2 and 3 --> vehicle speed --> .00390625 mph/ bit 
+bytes 2 and 3 --> vehicle speed --> .00390625 mph/ bit
 byte 4 --> gear calculated --> no scaling
 byte 5 --> ign timing --> .35156 deg/bit
 bytes 6 and 7 --> battery voltage --> .0002455 V/bit
 
 
 */
-const int MESSAGE_ONE = 4294942720; 
+const int MESSAGE_ONE = 4294942720;
 const int MESSAGE_TWO = 4294942721;
 const int MESSAGE_THREE = 4294942722;
 const int MESSAGE_FOUR = 4294942723;
@@ -116,12 +117,25 @@ boolean warning = false;
 #define rxPinXBee 2
 #define txPinXBee 3
 
+#define RPM_MAX 12000
+#define RPM_MIN 0
+
 SoftwareSerial XBee(rxPinXBee, txPinXBee);
 PacketSender toRadio(XBee);
 
+int SER_Pin = 4;   //pin 14 on the 75HC595
+int RCLK_Pin = 3;  //pin 12 on the 75HC595
+int SRCLK_Pin = 5; //pin 11 on the 75HC595
 
+//How many of the shift registers - change this
+#define number_of_74hc595s 3
 
-void setup(){
+//do not touch
+#define numOfRegisterPins number_of_74hc595s * 8
+
+boolean registers[numOfRegisterPins];
+
+void setup() {
 
   rpm = 0;
   load = 0;
@@ -129,10 +143,19 @@ void setup(){
   vehicleSpeed = 0;
   gear = 0;
   volts = 0;
-  
+
+  pinMode(SER_Pin, OUTPUT);
+  pinMode(RCLK_Pin, OUTPUT);
+  pinMode(SRCLK_Pin, OUTPUT);
+
+
+  //reset all register pins
+  clearRegisters();
+  writeRegisters();
+
   Serial.begin(9600);
   //Initialise MCP2515 CAN controller at the specified speed
-  if(Canbus.init(CANSPEED_500)){
+  if (Canbus.init(CANSPEED_500)) {
     Serial.println("CAN Init ok");
   }
   else {
@@ -147,133 +170,178 @@ void setup(){
 
 }
 
+void loop() {
 
+  if (millis() > displayLoopEndTime) {
+    display.clearDisplay();
 
-
-
-
-void loop(){ 
-
-if (millis() > displayLoopEndTime){
-  display.clearDisplay();
-  
-  display.setTextSize(2);
-  display.setTextColor(WHITE);
-
-  display.setCursor(0,0);
-  display.print((long)rpm);
-  display.setTextSize(1);
-  display.println("rpm");
-
-  
-  display.setCursor(0, 20);
-  display.println("Gear:");
-  display.setCursor(0,28);
-  display.setTextSize(2);
-  display.println(gear);
-  
-
-  display.setCursor(115, 50);
-  display.print("C");
-
-  display.drawCircle(110, 50, 2, WHITE);
-
-  if (coolant >= OVERHEATING || rpm >= REDLINE){
-    warning =  !(warning);
-  }
-  else if (warning){
-    warning = false;
-  }
-
-  if (warning){
-    display.setCursor(0, 50);
     display.setTextSize(2);
-    display.print("WARNING");
+    display.setTextColor(WHITE);
+
+    display.setCursor(0, 0);
+    display.print((long)rpm);
+    display.setTextSize(1);
+    display.println("rpm");
+
+
+    display.setCursor(0, 20);
+    display.println("Gear:");
+    display.setCursor(0, 28);
+    display.setTextSize(2);
+    display.println(gear);
+
+
+    display.setCursor(115, 50);
+    display.print("C");
+
+    display.drawCircle(110, 50, 2, WHITE);
+
+    if (coolant >= OVERHEATING || rpm >= REDLINE) {
+      warning =  !(warning);
+    }
+    else if (warning) {
+      warning = false;
+    }
+
+    if (warning) {
+      display.setCursor(0, 50);
+      display.setTextSize(2);
+      display.print("WARNING");
+    }
+
+    int digits = (int) (log10(abs(coolant)));
+
+    display.setTextSize(2);
+    display.setCursor(96 - 11 * digits, 50);
+    display.print(coolant);
+
+    display.display();
+
+    setLights();
+
+    displayLoopEndTime += displayDeltaTime;
   }
-  
-  int digits = (int) (log10(abs(coolant)));
-  
-  display.setTextSize(2);
-  display.setCursor(96 - 11 * digits, 50);
-  display.print(coolant);
-  
-  display.display();
 
-  
-  
-  displayLoopEndTime += displayDeltaTime;
-}
+  tCAN message;
 
-tCAN message;
+  if (mcp2515_check_message()) {
+    if (mcp2515_get_message(&message)) {
 
-  if (mcp2515_check_message()){
-    if(mcp2515_get_message(&message)){
+      switch (message.id) {
 
-      switch(message.id){
+      case MESSAGE_ONE: {
+        uint16_t rawRPM = (uint16_t)message.data[0] << 8;
+        rawRPM |= message.data[1];
+        rpm = rawRPM * RPM_SCALE;
 
-        case MESSAGE_ONE: {
-          uint16_t rawRPM = (uint16_t)message.data[0] << 8;
-          rawRPM |= message.data[1];
-          rpm = rawRPM * RPM_SCALE;
+        toRadio.logRPM(rpm);
 
-          toRadio.logRPM(rpm);
+        uint16_t rawLoad = (uint16_t)message.data[2] << 8;
+        rawLoad |= message.data[3];
+        load = rawLoad * ENG_LOAD_SCALE;
 
-          uint16_t rawLoad = (uint16_t)message.data[2] << 8;
-          rawLoad |= message.data[3];
-          load = rawLoad * ENG_LOAD_SCALE;
+        toRadio.logLoad(load);
 
-          toRadio.logLoad(load);
+        coolant = message.data[7];
 
-          coolant = message.data[7];
+        toRadio.logCoolant(coolant);
 
-          toRadio.logCoolant(coolant);
-          
-          break;
-        }
+        break;
+      }
 
-        case MESSAGE_FOUR: {
-          uint16_t rawSpeed = (uint16_t)message.data[2] << 8;
-          rawSpeed |= message.data[3];
-          vehicleSpeed = rawSpeed * SPEED_SCALE;
+      case MESSAGE_FOUR: {
+        uint16_t rawSpeed = (uint16_t)message.data[2] << 8;
+        rawSpeed |= message.data[3];
+        vehicleSpeed = rawSpeed * SPEED_SCALE;
 
-          toRadio.logSpeed(vehicleSpeed);
+        toRadio.logSpeed(vehicleSpeed);
 
-          gear = message.data[4];
+        gear = message.data[4];
 
-          toRadio.logGear(gear);
+        toRadio.logGear(gear);
 
-          uint16_t rawVolts = (uint16_t)message.data[7] << 8;
-          rawVolts |= message.data[8];
-          volts = rawVolts * BATT_VOLTAGE_SCALE;
+        uint16_t rawVolts = (uint16_t)message.data[7] << 8;
+        rawVolts |= message.data[8];
+        volts = rawVolts * BATT_VOLTAGE_SCALE;
 
-          toRadio.logVolts(volts);
-          break;
-        }
+        toRadio.logVolts(volts);
+        break;
+      }
 
-         default: {
-          break;
-         }
+      default: {
+        break;
+      }
 
-      } 
+      }
     }
   }
-  else{
-    Serial.println("No data");   
+  else {
+    Serial.println("No data");
   }
 
-  
-  
-  if (millis() > loopEndTime){
+
+
+  if (millis() > loopEndTime) {
     ++coolant;
     ++gear;
     rpm += 500;
     loopEndTime += 1000;
+    if (rpm > RPM_MAX+1000) {
+      rpm -= RPM_MAX;
+      gear = 0;
+      coolant = 0;
+    }
   }
 
 
 
 }
 
+void clearRegisters() {
+  for (int i = numOfRegisterPins - 1; i >=  0; i--) {
+    registers[i] = LOW;
+  }
+  writeRegisters();
+}
+
+
+//Set and display registers
+//Only call AFTER all values are set how you would like (slow otherwise)
+void writeRegisters() {
+
+  digitalWrite(RCLK_Pin, LOW);
+
+  for (int i = numOfRegisterPins - 1; i >=  0; i--) {
+    digitalWrite(SRCLK_Pin, LOW);
+
+    int val = registers[i];
+
+    digitalWrite(SER_Pin, val);
+    digitalWrite(SRCLK_Pin, HIGH);
+
+  }
+  digitalWrite(RCLK_Pin, HIGH);
+
+}
+
+//set an individual pin HIGH or LOW
+void setRegisterPin(int index, int value) {
+  registers[index] = value;
+}
+
+//Set the lights according to the RPM value
+void setLights() {
+
+  clearRegisters();
+
+  int temp = map(rpm, 0, RPM_MAX, 0, 10);
+
+  for (int i = 0; i < temp; i++) {
+    setRegisterPin(i, HIGH);
+    setRegisterPin(19 - i, HIGH);
+    writeRegisters();
+  }
+}
 
 
 

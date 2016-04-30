@@ -5,11 +5,11 @@ WURacing Electronics Team Spring 2016
 Carter Durno, Michael Greer, Thomas Kelly, Evan Simkowitz
 
 The purpose of this code is to read packets coming from our AEM Infinity ECU over the
-AEMNet protocol and write it over XBee to a computer. 
+AEMNet protocol and write it over XBee to a computer.
 
 Be aware that to read the XBee stream, we wrote our own reader on the computer side which
-displays our data in real-time and writes it to a CSV. Because our ECU writes data over in 
-packets, we left most of the sorting to our Python application, which reads the data in 
+displays our data in real-time and writes it to a CSV. Because our ECU writes data over in
+packets, we left most of the sorting to our Python application, which reads the data in
 and organizes it before saving it.
 
 Many of the libraries have been adapted to work with AEMNet, which varies slightly from the
@@ -30,37 +30,49 @@ is disrupted.
 #include <SoftwareSerial.h>
 #include "PacketSender.h"
 
+#include <math.h>
 
 #include <SPI.h>
 #include <Wire.h>
 #include <SD.h>
 #include <QueueList.h>
-//#include <Adafruit_GFX.h>
-//#include <Adafruit_SSD1306.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1305.h>
+// Used for software SPI
+#define OLED_CLK 13
+#define OLED_MOSI 11
 
-//#define OLED_RESET 4
-//Adafruit_SSD1306 display(OLED_RESET);
+// Used for software or hardware SPI
+#define OLED_CS 10
+#define OLED_DC 8
 
-//#define LOGO16_GLCD_HEIGHT 16
-//#define LOGO16_GLCD_WIDTH  16
-//static const unsigned char PROGMEM logo16_glcd_bmp[] =
-/*{ B00000000, B11000000,
-  B00000001, B11000000,
-  B00000001, B11000000,
-  B00000011, B11100000,
-  B11110011, B11100000,
-  B11111110, B11111000,
-  B01111110, B11111111,
-  B00110011, B10011111,
-  B00011111, B11111100,
-  B00001101, B01110000,
-  B00011011, B10100000,
-  B00111111, B11100000,
-  B00111111, B11110000,
-  B01111100, B11110000,
-  B01110000, B01110000,
-  B00000000, B00110000 };*/
+// Used for I2C or SPI
+#define OLED_RESET 9
 
+// software SPI
+//Adafruit_SSD1305 display(OLED_MOSI, OLED_CLK, OLED_DC, OLED_RESET, OLED_CS);
+// hardware SPI
+Adafruit_SSD1305 display(OLED_DC, OLED_RESET, OLED_CS);
+#define LOGO16_GLCD_HEIGHT 16
+#define LOGO16_GLCD_WIDTH  16
+static const unsigned char PROGMEM logo16_glcd_bmp[] =
+{	B00000000, B11000000,
+	B00000001, B11000000,
+	B00000001, B11000000,
+	B00000011, B11100000,
+	B11110011, B11100000,
+	B11111110, B11111000,
+	B01111110, B11111111,
+	B00110011, B10011111,
+	B00011111, B11111100,
+	B00001101, B01110000,
+	B00011011, B10100000,
+	B00111111, B11100000,
+	B00111111, B11110000,
+	B01111100, B11110000,
+	B01110000, B01110000,
+	B00000000, B00110000
+};
 
 
 //#if (SSD1306_LCDHEIGHT != 64)
@@ -121,10 +133,10 @@ const float SPEED_SCALE = .00390625;
 const float IGN_SCALE = .35156;
 const float BATT_VOLTAGE_SCALE = .0002455;
 
-const int rpmDeltaTime = 250;
+const int displayDeltaTime = 250;
+unsigned long displayLoopEndTime = 6000;
 
-// Defines how much we want to update our OLED display.
-unsigned long rpmLoopEndTime = 6000;
+unsigned long loopEndTime = 1000;
 
 double rpm;
 double load;
@@ -132,6 +144,15 @@ int8_t coolant;
 double vehicleSpeed;
 byte gear;
 double volts;
+
+boolean warning = false;
+
+#define OVERHEATING 93
+#define REDLINE 12000
+
+
+#define rxPinXBee 2
+#define txPinXBee 3
 
 #define rxPinXBee 2
 #define txPinXBee 3
@@ -149,159 +170,201 @@ QueueList<uint16_t> voltsList;
 
 void setup() {
 
-  rpm = 0;
-  load = 0;
-  coolant = 0;
-  vehicleSpeed = 0;
-  gear = 0;
-  volts = 0;
+	rpm = 0;
+	load = 0;
+	coolant = 0;
+	vehicleSpeed = 0;
+	gear = 0;
+	volts = 0;
 
-  Serial.begin(9600);
-  //Initialise MCP2515 CAN controller at the specified speed
-  if (Canbus.init(CANSPEED_500)) {
-    Serial.println("CAN Init ok");
-  }
-  else {
-    Serial.println("Couldn't Init CAN");
-  }
+	Serial.begin(9600);
+	//Initialise MCP2515 CAN controller at the specified speed
+	if (Canbus.init(CANSPEED_500)) {
+		Serial.println("CAN Init ok");
+	}
+	else {
+		Serial.println("Couldn't Init CAN");
+	}
 
-  // make sure that the default chip select pin is set to
-  // output, even if you don't use it:
-  pinMode(chipSelect, OUTPUT);
+	// make sure that the default chip select pin is set to
+	// output, even if you don't use it:
+	pinMode(chipSelect, OUTPUT);
 
-  // see if the card is present and can be initialized:
-  if (!SD.begin(chipSelect)) {
-    Serial.println("Card failed, or not present");
-    // don't do anything more:
-  } else
-    Serial.println("card initialized.");
-  delay(500);
+	// see if the card is present and can be initialized:
+	if (!SD.begin(chipSelect)) {
+		Serial.println("Card failed, or not present");
+		// don't do anything more:
+	} else
+		Serial.println("card initialized.");
+	delay(500);
 
-  /*display.begin(SSD1306_SWITCHCAPVCC, 0x3C);  // initialize with the I2C addr 0x3D (for the 128x64)
-    // init done
-
-    // Show image buffer on the display hardware.
-    // Since the buffer is intialized with an Adafruit splashscreen
-    // internally, this will display the splashscreen.
-    display.display();
-    delay(6000);
-    display.clearDisplay();*/
+	display.begin();
+	display.display();
+	delay(1000);
 
 }
 
 void loop() {
 
-  if (millis() > rpmLoopEndTime) {
-    /*display.clearDisplay();
-    display.setTextSize(4);
-    display.setTextColor(WHITE);
-    display.setCursor(0,15);
-    display.println((int)rpm);
-    display.display();
-    rpmLoopEndTime += rpmDeltaTime;*/
-  }
+	if (millis() > displayLoopEndTime) {
+		display.clearDisplay();
 
-  tCAN message;
+		display.setTextSize(2);
+		display.setTextColor(WHITE);
 
-  /* 
-  This section of the code reads messages in from the ECU and writes them to the
-  XBee stream, as well as to the QueueLists.
-  */
-  if (mcp2515_check_message()) {
-    if (mcp2515_get_message(&message)) {
+		display.setCursor(0, 0);
+		display.print((long)rpm);
+		display.setTextSize(1);
+		display.println("rpm");
 
-      switch (message.id) {
 
-      case MESSAGE_ONE: 
-      {
-        uint16_t rawRPM = (uint16_t)message.data[0] << 8;
-        rawRPM |= message.data[1];
-        rpm = rawRPM * RPM_SCALE;
+		display.setCursor(0, 20);
+		display.println("Gear:");
+		display.setCursor(0, 28);
+		display.setTextSize(2);
+		display.println(gear);
 
-        toRadio.logRPM(rpm);
-        rpmList.push(rpm);
 
-        uint16_t rawLoad = (uint16_t)message.data[2] << 8;
-        rawLoad |= message.data[3];
-        load = rawLoad * ENG_LOAD_SCALE;
+		display.setCursor(115, 50);
+		display.print("C");
 
-        toRadio.logLoad(load);
-        loadList.push(load);
+		display.drawCircle(110, 50, 2, WHITE);
 
-        coolant = message.data[7];
+		if (coolant >= OVERHEATING || rpm >= REDLINE) {
+			warning =  !(warning);
+		}
+		else if (warning) {
+			warning = false;
+		}
 
-        toRadio.logCoolant(coolant);
-        coolantList.push(coolant);
-        break;
-      }
+		if (warning) {
+			display.setCursor(0, 50);
+			display.setTextSize(2);
+			display.print("WARNING");
+		}
 
-      case MESSAGE_FOUR: 
-      {
-        uint16_t rawSpeed = (uint16_t)message.data[2] << 8;
-        rawSpeed |= message.data[3];
-        vehicleSpeed = rawSpeed * SPEED_SCALE;
+		int digits = (int) (log10(abs(coolant)));
 
-        toRadio.logSpeed(vehicleSpeed);
-        vehicleSpeedList.push(vehicleSpeed);
+		display.setTextSize(2);
+		display.setCursor(96 - 11 * digits, 50);
+		display.print(coolant);
 
-        gear = message.data[4];
+		display.display();
 
-        toRadio.logGear(gear);
-        gearList.push(gear);
 
-        uint16_t rawVolts = (uint16_t)message.data[7] << 8;
-        rawVolts |= message.data[8];
-        volts = rawVolts * BATT_VOLTAGE_SCALE;
 
-        toRadio.logVolts(volts);
-        voltsList.push(volts);
-        break;
-      }
+		displayLoopEndTime += displayDeltaTime;
+	}
 
-      default: 
-      {
-        break;
-      }
-      }
-    }
-  }
+	tCAN message;
 
-  /*
-  This next part of the code will check all of the QueueLists to see which has the least number
-  of entries. It will then record that many entries to the CSV file on the SD card. Because the
-  same number of each packet should come in over time, no individual QueueList should get very
-  long.
-  */
-  uint16_t counter = rpmList.count();
-  if (counter > loadList.count()) counter = loadList.count();
-  if (counter > coolantList.count()) counter = coolantList.count();
-  if (counter > vehicleSpeedList.count()) counter = vehicleSpeedList.count();
-  if (counter > gearList.count()) counter = gearList.count();
-  if (counter > voltsList.count()) counter = voltsList.count();
+	/*
+	This section of the code reads messages in from the ECU and writes them to the
+	XBee stream, as well as to the QueueLists.
+	*/
+	if (mcp2515_check_message()) {
+		if (mcp2515_get_message(&message)) {
 
-  // open the file. note that only one file can be open at a time,
-  // so you have to close this one before opening another.
-  // this opens the file and appends to the end of file
-  // if the file does not exist, this will create a new file.
-  String dataString = "";
-  for (int i = 0; i < counter; i++) {
-    File dataFile = SD.open(filename, FILE_WRITE);
-    if (dataFile) {
-      dataString += millis();
-      dataString += ",";
-      dataString += rpmList.pop();
-      dataString += ",";
-      dataString += loadList.pop();
-      dataString += ",";
-      dataString += coolantList.pop();
-      dataString += ",";
-      dataString += vehicleSpeedList.pop();
-      dataString += ",";
-      dataString += gearList.pop();
-      dataString += ",";
-      dataString += voltsList.pop();
-      dataFile.println(dataString);
-      dataFile.close();
-    }
-  }
+			switch (message.id) {
+
+			case MESSAGE_ONE:
+			{
+				uint16_t rawRPM = (uint16_t)message.data[0] << 8;
+				rawRPM |= message.data[1];
+				rpm = rawRPM * RPM_SCALE;
+
+				toRadio.logRPM(rpm);
+				rpmList.push(rpm);
+
+				uint16_t rawLoad = (uint16_t)message.data[2] << 8;
+				rawLoad |= message.data[3];
+				load = rawLoad * ENG_LOAD_SCALE;
+
+				toRadio.logLoad(load);
+				loadList.push(load);
+
+				coolant = message.data[7];
+
+				toRadio.logCoolant(coolant);
+				coolantList.push(coolant);
+				break;
+			}
+
+			case MESSAGE_FOUR:
+			{
+				uint16_t rawSpeed = (uint16_t)message.data[2] << 8;
+				rawSpeed |= message.data[3];
+				vehicleSpeed = rawSpeed * SPEED_SCALE;
+
+				toRadio.logSpeed(vehicleSpeed);
+				vehicleSpeedList.push(vehicleSpeed);
+
+				gear = message.data[4];
+
+				toRadio.logGear(gear);
+				gearList.push(gear);
+
+				uint16_t rawVolts = (uint16_t)message.data[7] << 8;
+				rawVolts |= message.data[8];
+				volts = rawVolts * BATT_VOLTAGE_SCALE;
+
+				toRadio.logVolts(volts);
+				voltsList.push(volts);
+				break;
+			}
+
+			default:
+			{
+				break;
+			}
+			}
+		}
+	}
+	else {
+		Serial.println("No data");
+	}
+	/*
+	This next part of the code will check all of the QueueLists to see which has the least number
+	of entries. It will then record that many entries to the CSV file on the SD card. Because the
+	same number of each packet should come in over time, no individual QueueList should get very
+	long.
+	*/
+	uint16_t counter = rpmList.count();
+	if (counter > loadList.count()) counter = loadList.count();
+	if (counter > coolantList.count()) counter = coolantList.count();
+	if (counter > vehicleSpeedList.count()) counter = vehicleSpeedList.count();
+	if (counter > gearList.count()) counter = gearList.count();
+	if (counter > voltsList.count()) counter = voltsList.count();
+
+	// open the file. note that only one file can be open at a time,
+	// so you have to close this one before opening another.
+	// this opens the file and appends to the end of file
+	// if the file does not exist, this will create a new file.
+	String dataString = "";
+	for (int i = 0; i < counter; i++) {
+		File dataFile = SD.open(filename, FILE_WRITE);
+		if (dataFile) {
+			dataString += millis();
+			dataString += ",";
+			dataString += rpmList.pop();
+			dataString += ",";
+			dataString += loadList.pop();
+			dataString += ",";
+			dataString += coolantList.pop();
+			dataString += ",";
+			dataString += vehicleSpeedList.pop();
+			dataString += ",";
+			dataString += gearList.pop();
+			dataString += ",";
+			dataString += voltsList.pop();
+			dataFile.println(dataString);
+			dataFile.close();
+		}
+	}
+	if (millis() > loopEndTime) {
+		++coolant;
+		++gear;
+		rpm += 500;
+		loopEndTime += 1000;
+	}
 }
