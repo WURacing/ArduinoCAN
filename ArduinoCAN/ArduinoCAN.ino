@@ -29,7 +29,7 @@ Adafruit_SSD1305 display(OLED_DC, OLED_RESET, OLED_CS);
 #include <math.h>
 
 #include <SoftwareSerial.h>
-#include "PacketSender.h"
+//#include "PacketSender.h"
 
 
 #include <SPI.h>
@@ -104,9 +104,20 @@ unsigned long loopEndTime = 1000;
 double rpm;
 double load;
 int8_t coolant;
+double o2;
 double vehicleSpeed;
 byte gear;
 double volts;
+
+#define RPM_INDEX 0
+#define LOAD_INDEX 1
+#define COOLANT_INDEX 2
+#define O2_INDEX 0
+#define SPEED_INDEX 3
+#define GEAR_INDEX 4
+#define VOLTS_INDEX 5
+
+double packet[6];
 
 boolean warning = false;
 
@@ -115,13 +126,13 @@ boolean warning = false;
 
 
 #define rxPinXBee 2
-#define txPinXBee 3
+#define txPinXBee 6
 
 #define RPM_MAX 12000
 #define RPM_MIN 0
 
 SoftwareSerial XBee(rxPinXBee, txPinXBee);
-PacketSender toRadio(XBee);
+//PacketSender toRadio(XBee);
 
 int SER_Pin = 4;   //pin 14 on the 75HC595
 int RCLK_Pin = 3;  //pin 12 on the 75HC595
@@ -137,12 +148,15 @@ boolean registers[numOfRegisterPins];
 
 void setup() {
 
+  XBee.begin(9600);
+  
   rpm = 0;
   load = 0;
   coolant = 0;
   vehicleSpeed = 0;
   gear = 0;
   volts = 0;
+  o2 = 0;
 
   pinMode(SER_Pin, OUTPUT);
   pinMode(RCLK_Pin, OUTPUT);
@@ -165,6 +179,7 @@ void setup() {
   delay(500);
 
   display.begin();
+  display.setRotation(2);
   display.display();
   delay(1000);
 
@@ -218,6 +233,7 @@ void loop() {
     display.display();
 
     setLights();
+    writePacket();
 
     displayLoopEndTime += displayDeltaTime;
   }
@@ -234,37 +250,46 @@ void loop() {
         rawRPM |= message.data[1];
         rpm = rawRPM * RPM_SCALE;
 
-        toRadio.logRPM(rpm);
+        packet[0] = rpm;
+        //toRadio.logRPM(rpm);
 
         uint16_t rawLoad = (uint16_t)message.data[2] << 8;
         rawLoad |= message.data[3];
         load = rawLoad * ENG_LOAD_SCALE;
 
-        toRadio.logLoad(load);
+        packet[1] = load;
+        //toRadio.logLoad(load);
 
         coolant = message.data[7];
 
-        toRadio.logCoolant(coolant);
+        packet[2] = (double)coolant;
+        //toRadio.logCoolant(coolant);
 
         break;
       }
 
       case MESSAGE_FOUR: {
+        uint8_t rawo2 = (uint8_t)message.data[0];
+        o2 = rawo2 * O2_SCALE;
+        
         uint16_t rawSpeed = (uint16_t)message.data[2] << 8;
         rawSpeed |= message.data[3];
         vehicleSpeed = rawSpeed * SPEED_SCALE;
 
-        toRadio.logSpeed(vehicleSpeed);
+        packet[3] = vehicleSpeed;
+        //toRadio.logSpeed(vehicleSpeed);
 
         gear = message.data[4];
 
-        toRadio.logGear(gear);
+        packet[4] = (double)gear;
+        //toRadio.logGear(gear);
 
         uint16_t rawVolts = (uint16_t)message.data[7] << 8;
         rawVolts |= message.data[8];
         volts = rawVolts * BATT_VOLTAGE_SCALE;
 
-        toRadio.logVolts(volts);
+        packet[5] = volts;
+        //toRadio.logVolts(volts);
         break;
       }
 
@@ -286,6 +311,11 @@ void loop() {
     ++gear;
     rpm += 500;
     loopEndTime += 1000;
+
+    packet[COOLANT_INDEX] = coolant;
+    packet[GEAR_INDEX] = gear;
+    packet[RPM_INDEX] = rpm;
+    
     if (rpm > RPM_MAX+1000) {
       rpm -= RPM_MAX;
       gear = 0;
@@ -341,6 +371,14 @@ void setLights() {
     setRegisterPin(19 - i, HIGH);
     writeRegisters();
   }
+}
+
+void writePacket(){
+  for (int i = 0; i < 6; ++i){
+    XBee.print(packet[i]);
+    XBee.print(',');
+  }
+  XBee.println(millis());
 }
 
 
