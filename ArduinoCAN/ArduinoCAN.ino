@@ -8,7 +8,7 @@
 #define OLED_MOSI 11
 
 // Used for software or hardware SPI
-#define OLED_CS 10
+#define OLED_CS A5
 #define OLED_DC 8
 
 // Used for I2C or SPI
@@ -101,9 +101,11 @@ unsigned long displayLoopEndTime = 6000;
 
 unsigned long loopEndTime = 1000;
 
+int8_t coolantC;
+
 double rpm;
 double load;
-int8_t coolant;
+double coolantF;
 double o2;
 double vehicleSpeed;
 byte gear;
@@ -112,12 +114,14 @@ double volts;
 #define RPM_INDEX 0
 #define LOAD_INDEX 1
 #define COOLANT_INDEX 2
-#define O2_INDEX 0
-#define SPEED_INDEX 3
-#define GEAR_INDEX 4
-#define VOLTS_INDEX 5
+#define O2_INDEX 3
+#define SPEED_INDEX 4
+#define GEAR_INDEX 5
+#define VOLTS_INDEX 6
 
-double packet[6];
+#define NUM_OUTPUTS 7
+
+double packet[7];
 
 boolean warning = false;
 
@@ -152,7 +156,8 @@ void setup() {
   
   rpm = 0;
   load = 0;
-  coolant = 0;
+  coolantC = 37;
+  coolantF = 0;
   vehicleSpeed = 0;
   gear = 0;
   volts = 0;
@@ -181,7 +186,7 @@ void setup() {
   display.begin();
   display.setRotation(2);
   display.display();
-  delay(1000);
+  delay(3000);
 
 }
 
@@ -206,12 +211,12 @@ void loop() {
     display.println(gear);
 
 
-    display.setCursor(115, 50);
-    display.print("C");
+    display.setCursor(115, 28);
+    display.print('F');
 
-    display.drawCircle(110, 50, 2, WHITE);
+    display.drawCircle(110, 28, 2, WHITE);
 
-    if (coolant >= OVERHEATING || rpm >= REDLINE) {
+    if (coolantC >= OVERHEATING || rpm >= REDLINE) {
       warning =  !(warning);
     }
     else if (warning) {
@@ -219,16 +224,16 @@ void loop() {
     }
 
     if (warning) {
-      display.setCursor(0, 50);
+      display.setCursor(22, 50);
       display.setTextSize(2);
       display.print("WARNING");
     }
 
-    int digits = (int) (log10(abs(coolant)));
+    int digits = (int) (log10(abs(coolantF)));
 
     display.setTextSize(2);
-    display.setCursor(96 - 11 * digits, 50);
-    display.print(coolant);
+    display.setCursor(72 - 12 * digits, 28);
+    display.print(coolantF, 1);
 
     display.display();
 
@@ -250,19 +255,21 @@ void loop() {
         rawRPM |= message.data[1];
         rpm = rawRPM * RPM_SCALE;
 
-        packet[0] = rpm;
+        packet[RPM_INDEX] = rpm;
         //toRadio.logRPM(rpm);
 
         uint16_t rawLoad = (uint16_t)message.data[2] << 8;
         rawLoad |= message.data[3];
         load = rawLoad * ENG_LOAD_SCALE;
 
-        packet[1] = load;
+        packet[LOAD_INDEX] = load;
         //toRadio.logLoad(load);
 
-        coolant = message.data[7];
+        coolantC = message.data[7];
 
-        packet[2] = (double)coolant;
+        coolantF = ((double)coolantC * 1.8) + 32;
+
+        packet[COOLANT_INDEX] = coolantF;
         //toRadio.logCoolant(coolant);
 
         break;
@@ -270,25 +277,27 @@ void loop() {
 
       case MESSAGE_FOUR: {
         uint8_t rawo2 = (uint8_t)message.data[0];
-        o2 = rawo2 * O2_SCALE;
+        o2 = rawo2 * O2_SCALE + 0.5;
+
+        packet[O2_INDEX] = o2;
         
         uint16_t rawSpeed = (uint16_t)message.data[2] << 8;
         rawSpeed |= message.data[3];
         vehicleSpeed = rawSpeed * SPEED_SCALE;
 
-        packet[3] = vehicleSpeed;
+        packet[SPEED_INDEX] = vehicleSpeed;
         //toRadio.logSpeed(vehicleSpeed);
 
         gear = message.data[4];
 
-        packet[4] = (double)gear;
+        packet[GEAR_INDEX] = (double)gear;
         //toRadio.logGear(gear);
 
         uint16_t rawVolts = (uint16_t)message.data[7] << 8;
         rawVolts |= message.data[8];
         volts = rawVolts * BATT_VOLTAGE_SCALE;
 
-        packet[5] = volts;
+        packet[VOLTS_INDEX] = volts;
         //toRadio.logVolts(volts);
         break;
       }
@@ -307,19 +316,21 @@ void loop() {
 
 
   if (millis() > loopEndTime) {
-    ++coolant;
+    ++coolantC;
     ++gear;
     rpm += 500;
     loopEndTime += 1000;
 
-    packet[COOLANT_INDEX] = coolant;
+    coolantF = ((double)coolantC * 1.8) + 32;
+
+    packet[COOLANT_INDEX] = coolantF;
     packet[GEAR_INDEX] = gear;
     packet[RPM_INDEX] = rpm;
     
     if (rpm > RPM_MAX+1000) {
       rpm -= RPM_MAX;
       gear = 0;
-      coolant = 0;
+      coolantC = 37;
     }
   }
 
@@ -374,7 +385,7 @@ void setLights() {
 }
 
 void writePacket(){
-  for (int i = 0; i < 6; ++i){
+  for (int i = 0; i < NUM_OUTPUTS; ++i){
     XBee.print(packet[i]);
     XBee.print(',');
   }
