@@ -1,23 +1,24 @@
 #include <Wire.h>
 #include <SPI.h>
 #include <Adafruit_GFX.h>
-#include <Adafruit_SSD1305.h>
+//#include <Adafruit_SSD1305.h>
+#include <Adafruit_SSD1306.h>
 
 // Used for software SPI
-#define OLED_CLK 13
-#define OLED_MOSI 11
+//#define OLED_CLK 13
+//#define OLED_MOSI 11
 
 // Used for software or hardware SPI
-#define OLED_CS A5
-#define OLED_DC 8
+//#define OLED_CS A5
+//#define OLED_DC 8
 
 // Used for I2C or SPI
-#define OLED_RESET 9
+#define OLED_RESET 4
 
 // software SPI
-//Adafruit_SSD1305 display(OLED_MOSI, OLED_CLK, OLED_DC, OLED_RESET, OLED_CS);
+Adafruit_SSD1306 display(OLED_RESET);
 // hardware SPI
-Adafruit_SSD1305 display(OLED_DC, OLED_RESET, OLED_CS);
+//Adafruit_SSD1305 display(OLED_DC, OLED_RESET, OLED_CS);
 
 #include "Canbus.h"  // don't forget to include these
 #include "defaults.h"
@@ -129,8 +130,8 @@ boolean warning = false;
 #define REDLINE 12000
 
 
-#define rxPinXBee 2
-#define txPinXBee 6
+#define rxPinXBee A3
+#define txPinXBee A4
 
 #define RPM_MAX 12000
 #define RPM_MIN 0
@@ -138,9 +139,9 @@ boolean warning = false;
 SoftwareSerial XBee(rxPinXBee, txPinXBee);
 //PacketSender toRadio(XBee);
 
-int SER_Pin = 4;   //pin 14 on the 75HC595
-int RCLK_Pin = 3;  //pin 12 on the 75HC595
-int SRCLK_Pin = 5; //pin 11 on the 75HC595
+int SER_Pin = A0;   //pin 14 on the 75HC595
+int RCLK_Pin = A1;  //pin 12 on the 75HC595
+int SRCLK_Pin = A2; //pin 11 on the 75HC595
 
 //How many of the shift registers - change this
 #define number_of_74hc595s 3
@@ -183,28 +184,30 @@ void setup() {
 
   delay(500);
 
-  display.begin();
+  /*display.begin();
   display.setRotation(2);
   display.display();
-  delay(3000);
+  delay(3000);*/
 
 }
 
 void loop() {
 
+  Serial.println("We loopin");
+  
   if (millis() > displayLoopEndTime) {
-    display.clearDisplay();
+    /*display.clearDisplay();
 
-    display.setTextSize(2);
+    display.setTextSize(3);
     display.setTextColor(WHITE);
 
     display.setCursor(0, 0);
     display.print((long)rpm);
-    display.setTextSize(1);
-    display.println("rpm");
+    display.setTextSize(2);
+    display.println("rpm");*/
 
 
-    display.setCursor(0, 20);
+    /*display.setCursor(0, 20);
     display.println("Gear:");
     display.setCursor(0, 28);
     display.setTextSize(2);
@@ -233,9 +236,9 @@ void loop() {
 
     display.setTextSize(2);
     display.setCursor(72 - 12 * digits, 28);
-    display.print(coolantF, 1);
+    display.print(coolantF, 1);*/
 
-    display.display();
+    //display.display();
 
     setLights();
     writePacket();
@@ -385,6 +388,7 @@ void setLights() {
 }
 
 void writePacket(){
+  Serial.println("writing stuff to xbee serial");
   for (int i = 0; i < NUM_OUTPUTS; ++i){
     XBee.print(packet[i]);
     XBee.print(',');
