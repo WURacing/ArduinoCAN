@@ -152,6 +152,7 @@ double volts;
 double packet[7];
 
 boolean warning = false;
+boolean showedWarning = false;
 
 #define OVERHEATING 93
 #define REDLINE 12000
@@ -164,12 +165,12 @@ boolean warning = false;
 #define RPM_MIN 0
 
 
-#define buttonPin A5
+#define buttonPin 6
 unsigned long int buttonReaderAccumulator = 0;
-const unsigned int buttonReaderDelay = 50;
+const unsigned int buttonReaderDelay = 20;
 bool buttons[3];
 unsigned int counter = 0;
-enum ButtonMode {RPM, Temp, Gear};
+enum ButtonMode {RPM, TEMP, GEAR};
 ButtonMode buttonMode = RPM;
 ButtonMode newButtonMode = RPM;
 
@@ -194,7 +195,7 @@ void setup() {
 
   rpm = 0;
   load = 0;
-  coolantC = 37;
+  coolantC = 0;
   coolantF = 0;
   vehicleSpeed = 0;
   gear = 0;
@@ -231,8 +232,29 @@ void setup() {
 
 void loop() {
 
-  Serial.println("We loopin");
-
+  switch (buttonMode) {
+  case RPM:
+    {
+      newButtonMode = TEMP;
+      break;
+    }
+  case TEMP:
+    {
+      newButtonMode = GEAR;
+      break;
+    }
+  case GEAR:
+    {
+      newButtonMode = RPM;
+      break;
+    }
+  default:
+    {
+      newButtonMode = RPM;
+      break;
+    }
+  }
+  
   /*
    * This part of the code is where we set the display, the LED array,
    * and where we call the method that streams our data to the XBee.
@@ -243,6 +265,29 @@ void loop() {
     display.setTextSize(3);
     display.setTextColor(WHITE);
 
+    if (coolantC >= OVERHEATING || rpm >= REDLINE) {
+    showedWarning =  !(showedWarning);
+      if (showedWarning){
+          warning = !(warning);
+      }
+    }
+    else if (warning) {
+    warning = false;
+    showedWarning = false;
+    }
+
+    boolean tempButtonMode;
+
+    if (coolantC >= OVERHEATING){
+        tempButtonMode = TEMP;
+    }
+    else if (rpm >= REDLINE){
+        tempButtonMode = RPM;
+    }
+    else{
+      tempButtonMode = buttonMode;
+    }
+
     /*
      * This switch statement writes different data to the display depending on
      * what mode we are in. The enumerable buttonMode can be rpm, temp, or gear.
@@ -251,42 +296,49 @@ void loop() {
      * modes when the button is pressed, ButtonMode is not set to newButtonMode until
      * later in the code when the button detection is occurring.
      */
-    switch (buttonMode) {
-      case RPM:
-        {
-          display.setCursor(0, 0);
-          display.print((long)rpm);
-          display.setTextSize(2);
-          display.println("rpm");
-
-          newButtonMode = Temp;
-          break;
-        }
-      case Temp:
-        {
-          display.setCursor(0, 0);
-          display.print((long)coolantF);
-          display.setTextSize(2);
-          display.setCursor(115, 0);
-          display.print('F');
-          display.drawCircle(110, 2, 2, WHITE);
-          newButtonMode = Gear;
-          break;
-        }
-      case Gear:
-        {
-          display.setCursor(0, 0);
-          display.println("Gear ");
-          display.print((long)gear);
-          newButtonMode = RPM;
-          break;
-        }
-      default:
-        {
-          newButtonMode = RPM;
-          break;
-        }
-    }
+     if (warning){
+      display.setCursor(0, 0);
+      display.println("WARNING");
+     }
+     else{
+      switch (tempButtonMode) {
+        case RPM:
+          {
+            display.setCursor(0, 0);
+            display.print((int)rpm);
+            display.setTextSize(2);
+            display.println("rpm");
+            break;
+          }
+        case TEMP:
+          {
+            display.setCursor(0, 0);
+            display.print(coolantF,1);
+            display.setTextSize(2);
+            display.setCursor(115, 0);
+            display.print('F');
+            display.drawCircle(110, 2, 2, WHITE);
+            break;
+          }
+        case GEAR:
+          {
+            display.setTextSize(2);
+            display.setCursor(0, 0);
+            display.print("Gear: ");
+            display.setTextSize(3);
+            display.print(gear);
+            break;
+          }
+        default:
+          {
+            display.setCursor(0, 0);
+            display.print((int)rpm);
+            display.setTextSize(2);
+            display.println("rpm");
+            break;
+          }
+      }
+     }
     
     /*display.setCursor(0, 20);
       display.println("Gear:");
@@ -414,7 +466,7 @@ void loop() {
     if (rpm > RPM_MAX + 1000) {
       rpm -= RPM_MAX;
       gear = 0;
-      coolantC = 37;
+      coolantC = 0;
     }
   }
 

@@ -19,7 +19,10 @@ We have updated the code to store a backup of the data to an SD card in case the
 disrupted. This requires no extra hardware because the SparkFun CAN-Bus Shield has a built-in 
 Micro-SD card reader.
 
-**UPDATE** The SD card support has been deprecated due to hardware restrictions and lack of necessity.
+**UPDATE** 4/29/16: The SD card support has been deprecated due to hardware restrictions and lack of necessity.
+
+**UPDATE** 5/3/16: After burning out our large display, we have rewritten the display code to use a smaller display
+which cycles through displaying a few different values with the use of a button.
 
 Many of the libraries have been adapted to work with AEMNet, which varies slightly from the
 CAN-Bus standard.
