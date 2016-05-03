@@ -1,3 +1,29 @@
+/*
+ArduinoCan.ino
+
+WURacing Electronics Team Spring 2016
+Carter Durno, Michael Greer, Thomas Kelly, Evan Simkowitz
+
+The purpose of this code is to read packets coming from our AEM Infinity ECU over the
+AEMNet protocol and write it over XBee to a computer.
+
+Be aware that to read the XBee stream, we wrote our own reader on the computer side which
+displays our data in real-time and writes it to a CSV. Because our ECU writes data over in
+packets, we left most of the sorting to our Python application, which reads the data in
+and organizes it before saving it.
+
+Many of the libraries have been adapted to work with AEMNet, which varies slightly from the
+CAN-Bus standard.
+
+UPDATE 5/3/16: After burning out our second large OLED display, we are now using a smaller one
+we found in the garage. Because of its small size, we have decided to only display one value at
+a time and shift through them using a button. This change is reflected in the code below, though
+we chose to leave the OLED display code commented out in case we decide to use a larger display
+later. Be careful, though, if you decide to uncomment it, that you don't delete parts of the current
+display code, as we were able to reuse some of it. You may have to play around with it to get it
+working for the large display.
+*/
+
 #include <Wire.h>
 #include <SPI.h>
 #include <Adafruit_GFX.h>
@@ -395,7 +421,12 @@ void loop() {
   /* 
    *  This is a simple debouncing filter for our mode-switching button. The
    *  way it's set up, it will debounce a button press and then set the mode
-   *  equal to the new mode set in the switch statement. 
+   *  equal to the new mode set in the switch statement. If the value of buttons[2]
+   *  is different from that of buttons[1], it will add a delay to prevent unnecessary
+   *  readings of the button and to make the code run more efficiently. The way the
+   *  filter works, it will only register a button press when the button is depressed.
+   *  This makes the reading more accurate and helps compensate for lower-quality 
+   *  button contacts.
    */
   bool buttonPressed = false;
   readButton();
@@ -420,10 +451,19 @@ void loop() {
   buttons[1] = buttons[2];
 }
 
+/*
+ * Reads the current value of the button at buttonPin as a boolean value
+ * and sets the third value of the boolean array buttons[] equal to the value
+ * of buttonPin.
+ */
 void readButton() {
   buttons[2] = digitalRead(buttonPin);
 }
 
+/*
+ * This method and the next couple control the shift registers that power
+ * the LED array.
+ */
 void clearRegisters() {
   for (int i = numOfRegisterPins - 1; i >=  0; i--) {
     registers[i] = LOW;
@@ -470,6 +510,10 @@ void setLights() {
   }
 }
 
+/*
+ * This method writes data to our XBee to be relayed back to the computer in the
+ * pit. To use this code, you must be using our accompanying computer application.
+ */
 void writePacket() {
   Serial.println("writing stuff to xbee serial");
   for (int i = 0; i < NUM_OUTPUTS; ++i) {
