@@ -169,7 +169,7 @@ unsigned long int buttonReaderAccumulator = 0;
 const unsigned int buttonReaderDelay = 50;
 bool buttons[3];
 unsigned int counter = 0;
-enum ButtonMode {RPM, Temp, Gear};
+enum ButtonMode {RPM, TEMP, GEAR};
 ButtonMode buttonMode = RPM;
 ButtonMode newButtonMode = RPM;
 
@@ -259,10 +259,10 @@ void loop() {
           display.setTextSize(2);
           display.println("rpm");
 
-          newButtonMode = Temp;
+          newButtonMode = TEMP;
           break;
         }
-      case Temp:
+      case TEMP:
         {
           display.setCursor(0, 0);
           display.print((long)coolantF);
@@ -270,10 +270,10 @@ void loop() {
           display.setCursor(115, 0);
           display.print('F');
           display.drawCircle(110, 2, 2, WHITE);
-          newButtonMode = Gear;
+          newButtonMode = GEAR;
           break;
         }
-      case Gear:
+      case GEAR:
         {
           display.setCursor(0, 0);
           display.println("Gear ");
