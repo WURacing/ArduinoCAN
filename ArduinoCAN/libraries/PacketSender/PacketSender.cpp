@@ -1,6 +1,6 @@
 #include "PacketSender.h"
 
-PacketSender::PacketSender(SoftwareSerial in) : mySerial(in), mask(0) {}
+PacketSender::PacketSender(SoftwareSerial in) : mySerial(in), mask(0), rpm(0), load(0), coolant(0), speed(0), gear(0), volts(0)  {}
 
 void PacketSender::logRPM(double _rpm){
 	this->rpm = _rpm;

@@ -1,6 +1,6 @@
 #include "PacketSender.h"
 
-PacketSender::PacketSender(SoftwareSerial in) : mySerial(in), mask(0) {}
+PacketSender::PacketSender(SoftwareSerial in) : mySerial(in), mask(0), rpm(0), load(0), coolant(0), speed(0), gear(0), volts(0)  {}
 
 void PacketSender::logRPM(double _rpm){
 	this->rpm = _rpm;
@@ -18,7 +18,7 @@ void PacketSender::logLoad(double _load){
 	}
 }
 
-void PacketSender::logCoolant(uint8_t _coolant){
+void PacketSender::logCoolant(int8_t _coolant){
 	this->coolant = _coolant;
 	this->mask |= 0x08;
 	if (mask >= 0x3f){
@@ -34,7 +34,7 @@ void PacketSender::logSpeed(double _speed){
 	}
 }
 
-void PacketSender::logGear(int8_t _gear){
+void PacketSender::logGear(uint8_t _gear){
 	this->gear = _gear;
 	this->mask |= 0x02;
 	if (mask >= 0x3f){
