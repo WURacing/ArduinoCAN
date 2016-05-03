@@ -15,6 +15,7 @@
 // Used for I2C or SPI
 #define OLED_RESET 4
 
+
 // software SPI
 Adafruit_SSD1306 display(OLED_RESET);
 // hardware SPI
@@ -60,26 +61,26 @@ static const unsigned char PROGMEM logo16_glcd_bmp[] =
 
 /* MESSAGE IDS:
 
-MESSAGE_ONE:
-bytes 0 and 1 --> engine speed --> scale by .39063 rpm/bit
-bytes 2 and 3 --> engine load --> scale by .0015259 % / bit
-bytes 4 and 5 --> throttle --> scale by .0015259 % / bit
-byte 6 --> air temp --> no scale, 1 bit = 1 deg c
-byte 7 --> coolant temp --> no scale, 1 bit = 1 deg c
+  MESSAGE_ONE:
+  bytes 0 and 1 --> engine speed --> scale by .39063 rpm/bit
+  bytes 2 and 3 --> engine load --> scale by .0015259 % / bit
+  bytes 4 and 5 --> throttle --> scale by .0015259 % / bit
+  byte 6 --> air temp --> no scale, 1 bit = 1 deg c
+  byte 7 --> coolant temp --> no scale, 1 bit = 1 deg c
 
-MESSAGE_TWO:
-analog sensors --> 2 bytes for each sensor --> each scaled by .00007782 V/bit
+  MESSAGE_TWO:
+  analog sensors --> 2 bytes for each sensor --> each scaled by .00007782 V/bit
 
-MESSAGE_THREE:
-same as message two
+  MESSAGE_THREE:
+  same as message two
 
-MESSAGE_FOUR:
-byte 0 --> O2 sensor 1 --> .00390625 lambda / bit
-byte 1 --> O2 sensor 2 --> .00390625 lambda / bit
-bytes 2 and 3 --> vehicle speed --> .00390625 mph/ bit
-byte 4 --> gear calculated --> no scaling
-byte 5 --> ign timing --> .35156 deg/bit
-bytes 6 and 7 --> battery voltage --> .0002455 V/bit
+  MESSAGE_FOUR:
+  byte 0 --> O2 sensor 1 --> .00390625 lambda / bit
+  byte 1 --> O2 sensor 2 --> .00390625 lambda / bit
+  bytes 2 and 3 --> vehicle speed --> .00390625 mph/ bit
+  byte 4 --> gear calculated --> no scaling
+  byte 5 --> ign timing --> .35156 deg/bit
+  bytes 6 and 7 --> battery voltage --> .0002455 V/bit
 
 
 */
@@ -136,6 +137,16 @@ boolean warning = false;
 #define RPM_MAX 12000
 #define RPM_MIN 0
 
+
+#define buttonPin A5
+unsigned long int buttonReaderAccumulator = 0;
+const unsigned int buttonReaderDelay = 50;
+bool buttons[3];
+unsigned int counter = 0;
+enum ButtonMode {rpm, temp, gear};
+ButtonMode buttonMode = rpm;
+ButtonMode newButtonMode = rpm;
+
 SoftwareSerial XBee(rxPinXBee, txPinXBee);
 //PacketSender toRadio(XBee);
 
@@ -154,7 +165,7 @@ boolean registers[numOfRegisterPins];
 void setup() {
 
   XBee.begin(9600);
-  
+
   rpm = 0;
   load = 0;
   coolantC = 37;
@@ -168,6 +179,7 @@ void setup() {
   pinMode(RCLK_Pin, OUTPUT);
   pinMode(SRCLK_Pin, OUTPUT);
 
+  pinMode(buttonPin, INPUT);
 
   //reset all register pins
   clearRegisters();
@@ -184,61 +196,91 @@ void setup() {
 
   delay(500);
 
-  /*display.begin();
+  display.begin();
   display.setRotation(2);
   display.display();
-  delay(3000);*/
+  delay(3000);
 
 }
 
 void loop() {
 
   Serial.println("We loopin");
-  
+
   if (millis() > displayLoopEndTime) {
-    /*display.clearDisplay();
+    display.clearDisplay();
 
     display.setTextSize(3);
     display.setTextColor(WHITE);
+    switch (buttonMode) {
+      case rpm:
+        {
+          display.setCursor(0, 0);
+          display.print((long)rpm);
+          display.setTextSize(2);
+          display.println("rpm");
 
-    display.setCursor(0, 0);
-    display.print((long)rpm);
-    display.setTextSize(2);
-    display.println("rpm");*/
-
-
+          newButtonMode = temp;
+          break;
+        }
+      case temp:
+        {
+          display.setCursor(0, 0);
+          display.print((long)coolantF);
+          display.setTextSize(2);
+          display.setCursor(115, 0);
+          display.print('F');
+          display.drawCircle(110, 2, 2, WHITE);
+          newButtonMode = gear;
+          break;
+        }
+      case gear:
+        {
+          display.setCursor(0, 0);
+          display.println("Gear ");
+          display.print((long)gear);
+          newButtonMode = rpm;
+          break;
+        }
+      default:
+        {
+          newButtonMode = rpm;
+          break;
+        }
+    }
+    
     /*display.setCursor(0, 20);
-    display.println("Gear:");
-    display.setCursor(0, 28);
-    display.setTextSize(2);
-    display.println(gear);
+      display.println("Gear:");
+      display.setCursor(0, 28);
+      display.setTextSize(2);
+      display.println(gear);
 
 
-    display.setCursor(115, 28);
-    display.print('F');
+      display.setCursor(115, 28);
+      display.print('F');
 
-    display.drawCircle(110, 28, 2, WHITE);
+      display.drawCircle(110, 28, 2, WHITE);
 
-    if (coolantC >= OVERHEATING || rpm >= REDLINE) {
+      if (coolantC >= OVERHEATING || rpm >= REDLINE) {
       warning =  !(warning);
-    }
-    else if (warning) {
+      }
+      else if (warning) {
       warning = false;
-    }
+      }
 
-    if (warning) {
+      if (warning) {
       display.setCursor(22, 50);
       display.setTextSize(2);
       display.print("WARNING");
-    }
+      }
 
-    int digits = (int) (log10(abs(coolantF)));
+      int digits = (int) (log10(abs(coolantF)));
 
-    display.setTextSize(2);
-    display.setCursor(72 - 12 * digits, 28);
-    display.print(coolantF, 1);*/
+      display.setTextSize(2);
+      display.setCursor(72 - 12 * digits, 28);
+      display.print(coolantF, 1);*/
 
-    //display.display();
+    display.display();
 
     setLights();
     writePacket();
@@ -253,61 +295,55 @@ void loop() {
 
       switch (message.id) {
 
-      case MESSAGE_ONE: {
-        uint16_t rawRPM = (uint16_t)message.data[0] << 8;
-        rawRPM |= message.data[1];
-        rpm = rawRPM * RPM_SCALE;
+        case MESSAGE_ONE: {
+            uint16_t rawRPM = (uint16_t)message.data[0] << 8;
+            rawRPM |= message.data[1];
+            rpm = rawRPM * RPM_SCALE;
 
-        packet[RPM_INDEX] = rpm;
-        //toRadio.logRPM(rpm);
+            packet[RPM_INDEX] = rpm;
+            
+            uint16_t rawLoad = (uint16_t)message.data[2] << 8;
+            rawLoad |= message.data[3];
+            load = rawLoad * ENG_LOAD_SCALE;
 
-        uint16_t rawLoad = (uint16_t)message.data[2] << 8;
-        rawLoad |= message.data[3];
-        load = rawLoad * ENG_LOAD_SCALE;
+            packet[LOAD_INDEX] = load;
 
-        packet[LOAD_INDEX] = load;
-        //toRadio.logLoad(load);
+            coolantC = message.data[7];
 
-        coolantC = message.data[7];
+            coolantF = ((double)coolantC * 1.8) + 32;
 
-        coolantF = ((double)coolantC * 1.8) + 32;
+            packet[COOLANT_INDEX] = coolantF;
 
-        packet[COOLANT_INDEX] = coolantF;
-        //toRadio.logCoolant(coolant);
+            break;
+          }
 
-        break;
-      }
+        case MESSAGE_FOUR: {
+            uint8_t rawo2 = (uint8_t)message.data[0];
+            o2 = rawo2 * O2_SCALE + 0.5;
 
-      case MESSAGE_FOUR: {
-        uint8_t rawo2 = (uint8_t)message.data[0];
-        o2 = rawo2 * O2_SCALE + 0.5;
+            packet[O2_INDEX] = o2;
 
-        packet[O2_INDEX] = o2;
-        
-        uint16_t rawSpeed = (uint16_t)message.data[2] << 8;
-        rawSpeed |= message.data[3];
-        vehicleSpeed = rawSpeed * SPEED_SCALE;
+            uint16_t rawSpeed = (uint16_t)message.data[2] << 8;
+            rawSpeed |= message.data[3];
+            vehicleSpeed = rawSpeed * SPEED_SCALE;
 
-        packet[SPEED_INDEX] = vehicleSpeed;
-        //toRadio.logSpeed(vehicleSpeed);
+            packet[SPEED_INDEX] = vehicleSpeed;
 
-        gear = message.data[4];
+            gear = message.data[4];
 
-        packet[GEAR_INDEX] = (double)gear;
-        //toRadio.logGear(gear);
+            packet[GEAR_INDEX] = (double)gear;
 
-        uint16_t rawVolts = (uint16_t)message.data[7] << 8;
-        rawVolts |= message.data[8];
-        volts = rawVolts * BATT_VOLTAGE_SCALE;
+            uint16_t rawVolts = (uint16_t)message.data[7] << 8;
+            rawVolts |= message.data[8];
+            volts = rawVolts * BATT_VOLTAGE_SCALE;
 
-        packet[VOLTS_INDEX] = volts;
-        //toRadio.logVolts(volts);
-        break;
-      }
+            packet[VOLTS_INDEX] = volts;
+            break;
+          }
 
-      default: {
-        break;
-      }
+        default: {
+            break;
+          }
 
       }
     }
@@ -316,8 +352,10 @@ void loop() {
     Serial.println("No data");
   }
 
-
-
+  /*
+   * all this does is loop our values without requiring us to hook up
+   * to the ecu.
+   */
   if (millis() > loopEndTime) {
     ++coolantC;
     ++gear;
@@ -329,16 +367,44 @@ void loop() {
     packet[COOLANT_INDEX] = coolantF;
     packet[GEAR_INDEX] = gear;
     packet[RPM_INDEX] = rpm;
-    
-    if (rpm > RPM_MAX+1000) {
+
+    if (rpm > RPM_MAX + 1000) {
       rpm -= RPM_MAX;
       gear = 0;
       coolantC = 37;
     }
   }
 
+  /* 
+   *  This is a simple debouncing filter for our mode-switching button. The
+   *  way it's set up, it will debounce a button press and then set the mode
+   *  equal to the new mode set in the switch statement. 
+   */
+  bool buttonPressed = false;
+  readButton();
+  if (buttons[2] != buttons[1]) {
+    buttonReaderAccumulator = millis();
+  }
+  // actual debouncing filter
+  if (millis() - buttonReaderAccumulator > buttonReaderDelay) {
+    if (buttons[2] != buttons[0]) {
+      buttons[0] = buttons[2];
+      if (!buttons[0]) {
+        buttonPressed = true;
+      }
+    }
+  }
+  if (buttonPressed) {
+    buttonMode = newButtonMode;
+    String str = "new mode: ";
+    str += buttonMode;
+    Serial.println(str);
+  }
+  buttons[1] = buttons[2];
+}
 
-
+void readButton() {
+  buttons[2] = digitalRead(buttonPin);
 }
 
 void clearRegisters() {
@@ -387,9 +453,9 @@ void setLights() {
   }
 }
 
-void writePacket(){
+void writePacket() {
   Serial.println("writing stuff to xbee serial");
-  for (int i = 0; i < NUM_OUTPUTS; ++i){
+  for (int i = 0; i < NUM_OUTPUTS; ++i) {
     XBee.print(packet[i]);
     XBee.print(',');
   }
