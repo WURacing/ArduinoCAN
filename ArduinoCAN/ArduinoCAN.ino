@@ -143,9 +143,9 @@ unsigned long int buttonReaderAccumulator = 0;
 const unsigned int buttonReaderDelay = 50;
 bool buttons[3];
 unsigned int counter = 0;
-enum ButtonMode {rpm, temp, gear};
-ButtonMode buttonMode = rpm;
-ButtonMode newButtonMode = rpm;
+enum ButtonMode {RPM, Temp, Gear};
+ButtonMode buttonMode = RPM;
+ButtonMode newButtonMode = RPM;
 
 SoftwareSerial XBee(rxPinXBee, txPinXBee);
 //PacketSender toRadio(XBee);
@@ -207,23 +207,36 @@ void loop() {
 
   Serial.println("We loopin");
 
+  /*
+   * This part of the code is where we set the display, the LED array,
+   * and where we call the method that streams our data to the XBee.
+   */
   if (millis() > displayLoopEndTime) {
     display.clearDisplay();
 
     display.setTextSize(3);
     display.setTextColor(WHITE);
+
+    /*
+     * This switch statement writes different data to the display depending on
+     * what mode we are in. The enumerable buttonMode can be rpm, temp, or gear.
+     * In each case, the corresponding value is written to the display and the next
+     * mode is stored to the enumerable newButtonMode. Because we only want to change
+     * modes when the button is pressed, ButtonMode is not set to newButtonMode until
+     * later in the code when the button detection is occurring.
+     */
     switch (buttonMode) {
-      case rpm:
+      case RPM:
         {
           display.setCursor(0, 0);
           display.print((long)rpm);
           display.setTextSize(2);
           display.println("rpm");
 
-          newButtonMode = temp;
+          newButtonMode = Temp;
           break;
         }
-      case temp:
+      case Temp:
         {
           display.setCursor(0, 0);
           display.print((long)coolantF);
@@ -231,20 +244,20 @@ void loop() {
           display.setCursor(115, 0);
           display.print('F');
           display.drawCircle(110, 2, 2, WHITE);
-          newButtonMode = gear;
+          newButtonMode = Gear;
           break;
         }
-      case gear:
+      case Gear:
         {
           display.setCursor(0, 0);
           display.println("Gear ");
           display.print((long)gear);
-          newButtonMode = rpm;
+          newButtonMode = RPM;
           break;
         }
       default:
         {
-          newButtonMode = rpm;
+          newButtonMode = RPM;
           break;
         }
     }
@@ -288,6 +301,10 @@ void loop() {
     displayLoopEndTime += displayDeltaTime;
   }
 
+  /*
+   * This portion of the code is where the CAN messages are actually
+   * dissected and where we update our data values.
+   */
   tCAN message;
 
   if (mcp2515_check_message()) {
@@ -353,8 +370,8 @@ void loop() {
   }
 
   /*
-   * all this does is loop our values without requiring us to hook up
-   * to the ecu.
+   * All this does is loop our values without requiring us to hook up
+   * to the ECU.
    */
   if (millis() > loopEndTime) {
     ++coolantC;
