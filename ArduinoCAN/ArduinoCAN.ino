@@ -15,13 +15,10 @@ and organizes it before saving it.
 Many of the libraries have been adapted to work with AEMNet, which varies slightly from the
 CAN-Bus standard.
 
-UPDATE 5/3/16: After burning out our second large OLED display, we are now using a smaller one
-we found in the garage. Because of its small size, we have decided to only display one value at
-a time and shift through them using a button. This change is reflected in the code below, though
-we chose to leave the OLED display code commented out in case we decide to use a larger display
-later. Be careful, though, if you decide to uncomment it, that you don't delete parts of the current
-display code, as we were able to reuse some of it. You may have to play around with it to get it
-working for the large display.
+UPDATE 5/3/16: After burning out our second large OLED display, we have rewritten the display code to use a 
+smaller display. The new code will display one of three values at a time. The user can choose which value to
+display using a button, which will cycle through the modes when pressed. Code used for the larger display has
+been commented out and anyone looking to use a larger display may have to play around a bit to get it working.
 */
 
 #include <Wire.h>
