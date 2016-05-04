@@ -102,8 +102,6 @@ static const unsigned char PROGMEM logo16_glcd_bmp[] =
   byte 4 --> gear calculated --> no scaling
   byte 5 --> ign timing --> .35156 deg/bit
   bytes 6 and 7 --> battery voltage --> .0002455 V/bit
-
-
 */
 
 // declare message IDs
