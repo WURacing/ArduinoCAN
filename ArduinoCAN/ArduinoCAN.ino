@@ -1,27 +1,24 @@
 /*
-ArduinoCan.ino
+  ArduinoCAN.ino
 
-WURacing Electronics Team Spring 2016
-Carter Durno, Michael Greer, Thomas Kelly, Evan Simkowitz
+  WURacing Electronics Team Spring 2016
+  Carter Durno, Michael Greer, Thomas Kelly, Evan Simkowitz
 
-The purpose of this code is to read packets coming from our AEM Infinity ECU over the
-AEMNet protocol and write it over XBee to a computer.
+  The purpose of this code is to read packets coming from our AEM Infinity ECU over the
+  AEMNet protocol and write it over XBee to a computer.
 
-Be aware that to read the XBee stream, we wrote our own reader on the computer side which
-displays our data in real-time and writes it to a CSV. Because our ECU writes data over in
-packets, we left most of the sorting to our Python application, which reads the data in
-and organizes it before saving it.
+  Be aware that to read the XBee stream, we wrote our own reader on the computer side which
+  displays our data in real-time and writes it to a CSV. Because our ECU writes data over in
+  packets, we left most of the sorting to our Python application, which reads the data in
+  and organizes it before saving it.
 
-Many of the libraries have been adapted to work with AEMNet, which varies slightly from the
-CAN-Bus standard.
+  Many of the libraries have been adapted to work with AEMNet, which varies slightly from the
+  CAN-Bus standard.
 
-UPDATE 5/3/16: After burning out our second large OLED display, we are now using a smaller one
-we found in the garage. Because of its small size, we have decided to only display one value at
-a time and shift through them using a button. This change is reflected in the code below, though
-we chose to leave the OLED display code commented out in case we decide to use a larger display
-later. Be careful, though, if you decide to uncomment it, that you don't delete parts of the current
-display code, as we were able to reuse some of it. You may have to play around with it to get it
-working for the large display.
+  UPDATE 5/3/16: After burning out our second large OLED display, we have rewritten the display code to use a
+  smaller display. The new code will display one of three values at a time. The user can choose which value to
+  display using a button, which will cycle through the modes when pressed. Code used for the larger display has
+  been commented out and anyone looking to use a larger display may have to play around a bit to get it working.
 */
 
 #include <Wire.h>
@@ -41,7 +38,6 @@ working for the large display.
 // Used for I2C or SPI
 #define OLED_RESET 4
 
-
 // software SPI
 Adafruit_SSD1306 display(OLED_RESET);
 // hardware SPI
@@ -58,7 +54,6 @@ Adafruit_SSD1306 display(OLED_RESET);
 
 #include <SoftwareSerial.h>
 //#include "PacketSender.h"
-
 
 #include <SPI.h>
 #include <Wire.h>
@@ -107,14 +102,17 @@ static const unsigned char PROGMEM logo16_glcd_bmp[] =
   byte 4 --> gear calculated --> no scaling
   byte 5 --> ign timing --> .35156 deg/bit
   bytes 6 and 7 --> battery voltage --> .0002455 V/bit
-
-
 */
+
+// declare message IDs
 const int MESSAGE_ONE = 4294942720;
 const int MESSAGE_TWO = 4294942721;
 const int MESSAGE_THREE = 4294942722;
 const int MESSAGE_FOUR = 4294942723;
 
+// AEMNet sends all values as integers, which must be converted
+// with a predetermined scale. These scales were obtained from
+// AEM's documentation
 const float RPM_SCALE = .39063;
 const float ENG_LOAD_SCALE = .0015259;
 const float ENG_THROTTLE_SCALE = .0015259;
@@ -142,6 +140,8 @@ double vehicleSpeed;
 byte gear;
 double volts;
 
+// used with the sendPackets() method to determine which
+// index of packet[] to write different values to
 #define RPM_INDEX 0
 #define LOAD_INDEX 1
 #define COOLANT_INDEX 2
@@ -169,10 +169,15 @@ unsigned long noDataTime = noDataThreshold;
 #define rxPinXBee 8
 #define txPinXBee 9
 
-#define RPM_MAX 12000
-#define RPM_MIN 0
+// defines when to show a warning for either high rpm or high
+// temperature
+#define OVERHEATING 93
+#define REDLINE 12000
 
+#define rxPinXBee A3
+#define txPinXBee A4
 
+// definitions for the mode-switching functionality
 #define buttonPin 6
 unsigned long int buttonReaderAccumulator = 0;
 const unsigned int buttonReaderDelay = 20;
@@ -185,6 +190,10 @@ ButtonMode newButtonMode = RPM;
 
 SoftwareSerial XBee(rxPinXBee, txPinXBee);
 //PacketSender toRadio(XBee);
+
+// used for scaling the led array
+#define RPM_MAX 12000
+#define RPM_MIN 0
 
 int SER_Pin = A0;   //pin 14 on the 75HC595
 int RCLK_Pin = A1;  //pin 12 on the 75HC595
@@ -242,28 +251,28 @@ void setup() {
 void loop() {
 
   switch (buttonMode) {
-  case RPM:
-    {
-      newButtonMode = TEMP;
-      break;
-    }
-  case TEMP:
-    {
-      newButtonMode = GEAR;
-      break;
-    }
-  case GEAR:
-    {
-      newButtonMode = RPM;
-      break;
-    }
-  default:
-    {
-      newButtonMode = RPM;
-      break;
-    }
+    case RPM:
+      {
+        newButtonMode = TEMP;
+        break;
+      }
+    case TEMP:
+      {
+        newButtonMode = GEAR;
+        break;
+      }
+    case GEAR:
+      {
+        newButtonMode = RPM;
+        break;
+      }
+    default:
+      {
+        newButtonMode = RPM;
+        break;
+      }
   }
-  
+
   /*
    * This part of the code is where we set the display, the LED array,
    * and where we call the method that streams our data to the XBee.
@@ -272,7 +281,7 @@ void loop() {
     setLights();
     rpmLoopEndTime += rpmDeltaTime;
   }
-  
+
   if (millis() > displayLoopEndTime) {
     boolean sendToXbee = true;
     
@@ -282,41 +291,41 @@ void loop() {
     display.setTextColor(WHITE);
 
     if (coolantC >= OVERHEATING || rpm >= REDLINE) {
-    showedWarning =  !(showedWarning);
-      if (showedWarning){
-          warning = !(warning);
+      showedWarning =  !(showedWarning);
+      if (showedWarning) {
+        warning = !(warning);
       }
     }
     else if (warning) {
-    warning = false;
-    showedWarning = false;
+      warning = false;
+      showedWarning = false;
     }
 
     ButtonMode tempButtonMode;
 
-    if (coolantC >= OVERHEATING){
-        tempButtonMode = TEMP;
+    if (coolantC >= OVERHEATING) {
+      tempButtonMode = TEMP;
     }
-    else if (rpm >= REDLINE){
-        tempButtonMode = RPM;
+    else if (rpm >= REDLINE) {
+      tempButtonMode = RPM;
     }
-    else{
+    else {
       tempButtonMode = buttonMode;
     }
 
     /*
-     * This switch statement writes different data to the display depending on
-     * what mode we are in. The enumerable buttonMode can be rpm, temp, or gear.
-     * In each case, the corresponding value is written to the display and the next
-     * mode is stored to the enumerable newButtonMode. Because we only want to change
-     * modes when the button is pressed, ButtonMode is not set to newButtonMode until
-     * later in the code when the button detection is occurring.
-     */
-     if (warning){
+       This switch statement writes different data to the display depending on
+       what mode we are in. The enumerable buttonMode can be rpm, temp, or gear.
+       In each case, the corresponding value is written to the display and the next
+       mode is stored to the enumerable newButtonMode. Because we only want to change
+       modes when the button is pressed, ButtonMode is not set to newButtonMode until
+       later in the code when the button detection is occurring.
+    */
+    if (warning) {
       display.setCursor(0, 0);
       display.println("WARNING");
-     }
-     else{
+    }
+    else {
       switch (tempButtonMode) {
         case RPM:
           {
@@ -329,7 +338,7 @@ void loop() {
         case TEMP:
           {
             display.setCursor(0, 0);
-            display.print(coolantF,1);
+            display.print(coolantF, 1);
             display.setTextSize(2);
             display.setCursor(115, 0);
             display.print('F');
@@ -362,8 +371,8 @@ void loop() {
             break;
           }
       }
-     }
-    
+    }
+
     /*display.setCursor(0, 20);
       display.println("Gear:");
       display.setCursor(0, 28);
@@ -405,9 +414,9 @@ void loop() {
   }
 
   /*
-   * This portion of the code is where the CAN messages are actually
-   * dissected and where we update our data values.
-   */
+     This portion of the code is where the CAN messages are actually
+     dissected and where we update our data values.
+  */
   tCAN message;
 
   if (mcp2515_check_message()) {
@@ -427,7 +436,7 @@ void loop() {
             rpm = rawRPM * RPM_SCALE;
 
             packet[RPM_INDEX] = rpm;
-            
+
             uint16_t rawLoad = (uint16_t)message.data[2] << 8;
             rawLoad |= message.data[3];
             load = rawLoad * ENG_LOAD_SCALE;
@@ -492,7 +501,7 @@ void loop() {
    * All this does is loop our values without requiring us to hook up
    * to the ECU.
    */
-  /*if (millis() > loopEndTime) {
+  if (millis() > loopEndTime) {
     ++coolantC;
     ++gear;
     rpm += 500;
@@ -511,16 +520,10 @@ void loop() {
     }
   }*/
 
-  /* 
-   *  This is a simple debouncing filter for our mode-switching button. The
-   *  way it's set up, it will debounce a button press and then set the mode
-   *  equal to the new mode set in the switch statement. If the value of buttons[2]
-   *  is different from that of buttons[1], it will add a delay to prevent unnecessary
-   *  readings of the button and to make the code run more efficiently. The way the
-   *  filter works, it will only register a button press when the button is depressed.
-   *  This makes the reading more accurate and helps compensate for lower-quality 
-   *  button contacts.
-   */
+  /*
+      This is a simple debouncing filter for our mode-switching button. The way the
+      filter works, it will only register a button press when the button is depressed.
+  */
   bool buttonPressed = false;
   readButton();
   if (buttons[2] != buttons[1]) {
@@ -544,26 +547,20 @@ void loop() {
   buttons[1] = buttons[2];
 }
 
-/*
- * Reads the current value of the button at buttonPin as a boolean value
- * and sets the third value of the boolean array buttons[] equal to the value
- * of buttonPin.
- */
 void readButton() {
   buttons[2] = digitalRead(buttonPin);
 }
 
 /*
- * This method and the next couple control the shift registers that power
- * the LED array.
- */
+   This method and the next couple control the shift registers that power
+   the LED array.
+*/
 void clearRegisters() {
   for (int i = numOfRegisterPins - 1; i >=  0; i--) {
     registers[i] = LOW;
   }
   writeRegisters();
 }
-
 
 //Set and display registers
 //Only call AFTER all values are set how you would like (slow otherwise)
@@ -604,9 +601,9 @@ void setLights() {
 }
 
 /*
- * This method writes data to our XBee to be relayed back to the computer in the
- * pit. To use this code, you must be using our accompanying computer application.
- */
+   This method writes data to our XBee to be relayed back to the computer in the
+   pit. To use this code, you must be using our accompanying computer application.
+*/
 void writePacket() {
   Serial.println("writing stuff to xbee serial");
   for (int i = 0; i < NUM_OUTPUTS; ++i) {
@@ -615,9 +612,3 @@ void writePacket() {
   }
   XBee.println(millis());
 }
-
-
-
-
-
-
