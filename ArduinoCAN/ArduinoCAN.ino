@@ -487,7 +487,7 @@ void loop() {
     Serial.println("No data");
     if (noData){
       if (millis() >=  noDataTime + noDataThreshold){
-        chachedButtonMode = buttonMode;
+        cachedButtonMode = buttonMode;
         buttonMode = NODATA;
       }
     }
@@ -518,7 +518,7 @@ void loop() {
       gear = 0;
       coolantC = 0;
     }
-  }*/
+  }
 
   /*
       This is a simple debouncing filter for our mode-switching button. The way the
