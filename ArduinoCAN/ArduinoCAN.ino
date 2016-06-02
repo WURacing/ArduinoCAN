@@ -125,6 +125,9 @@ const float BATT_VOLTAGE_SCALE = .0002455;
 const int displayDeltaTime = 250;
 unsigned long displayLoopEndTime = 6000;
 
+const int rpmDeltaTime = 50;
+unsigned long rpmLoopEndTime = 3500;
+
 unsigned long loopEndTime = 1000;
 
 int8_t coolantC;
@@ -154,6 +157,18 @@ double packet[7];
 boolean warning = false;
 boolean showedWarning = false;
 
+boolean noData = false;
+
+int noDataThreshold = 5000;
+unsigned long noDataTime = noDataThreshold;
+
+#define OVERHEATING 93
+#define REDLINE 12000
+
+
+#define rxPinXBee 8
+#define txPinXBee 9
+
 // defines when to show a warning for either high rpm or high
 // temperature
 #define OVERHEATING 93
@@ -168,8 +183,9 @@ unsigned long int buttonReaderAccumulator = 0;
 const unsigned int buttonReaderDelay = 20;
 bool buttons[3];
 unsigned int counter = 0;
-enum ButtonMode {RPM, TEMP, GEAR};
+enum ButtonMode {RPM, TEMP, GEAR, NODATA};
 ButtonMode buttonMode = RPM;
+ButtonMode cachedButtonMode = RPM;
 ButtonMode newButtonMode = RPM;
 
 SoftwareSerial XBee(rxPinXBee, txPinXBee);
@@ -258,10 +274,17 @@ void loop() {
   }
 
   /*
-     This part of the code is where we set the display, the LED array,
-     and where we call the method that streams our data to the XBee.
-  */
+   * This part of the code is where we set the display, the LED array,
+   * and where we call the method that streams our data to the XBee.
+   */
+  if (millis() > rpmLoopEndTime){
+    setLights();
+    rpmLoopEndTime += rpmDeltaTime;
+  }
+
   if (millis() > displayLoopEndTime) {
+    boolean sendToXbee = true;
+    
     display.clearDisplay();
 
     display.setTextSize(3);
@@ -278,7 +301,7 @@ void loop() {
       showedWarning = false;
     }
 
-    boolean tempButtonMode;
+    ButtonMode tempButtonMode;
 
     if (coolantC >= OVERHEATING) {
       tempButtonMode = TEMP;
@@ -331,6 +354,14 @@ void loop() {
             display.print(gear);
             break;
           }
+        case NODATA:
+          {
+            display.setCursor(0,0);
+            display.setTextSize(3);
+            display.println("NO DATA");
+            sendToXbee = false;
+            break;
+          }
         default:
           {
             display.setCursor(0, 0);
@@ -374,9 +405,10 @@ void loop() {
       display.print(coolantF, 1);*/
 
     display.display();
-
-    setLights();
-    writePacket();
+    
+    if(sendToXbee){
+      writePacket();
+    }
 
     displayLoopEndTime += displayDeltaTime;
   }
@@ -389,6 +421,12 @@ void loop() {
 
   if (mcp2515_check_message()) {
     if (mcp2515_get_message(&message)) {
+
+      Serial.println("We found data");
+      noData = false;
+      if (buttonMode == NODATA){
+        buttonMode = cachedButtonMode;
+      }
 
       switch (message.id) {
 
@@ -447,12 +485,22 @@ void loop() {
   }
   else {
     Serial.println("No data");
+    if (noData){
+      if (millis() >=  noDataTime + noDataThreshold){
+        cachedButtonMode = buttonMode;
+        buttonMode = NODATA;
+      }
+    }
+    else{
+      noData = true;
+      noDataTime = millis();
+    }
   }
 
   /*
-     All this does is loop our values without requiring us to hook up
-     to the ECU.
-  */
+   * All this does is loop our values without requiring us to hook up
+   * to the ECU.
+   */
   if (millis() > loopEndTime) {
     ++coolantC;
     ++gear;
