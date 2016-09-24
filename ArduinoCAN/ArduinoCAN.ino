@@ -26,6 +26,17 @@
 #include <Adafruit_GFX.h>
 //#include <Adafruit_SSD1305.h>
 #include <Adafruit_SSD1306.h>
+#include "Canbus.h"  // don't forget to include these
+#include "defaults.h"
+#include "global.h"
+#include "mcp2515.h"
+#include "mcp2515_defs.h"
+#include "stdlib.h"
+
+#include <math.h>
+
+#include <SoftwareSerial.h>
+//#include "PacketSender.h"
 
 // Used for software SPI
 //#define OLED_CLK 13
@@ -42,21 +53,6 @@
 Adafruit_SSD1306 display(OLED_RESET);
 // hardware SPI
 //Adafruit_SSD1305 display(OLED_DC, OLED_RESET, OLED_CS);
-
-#include "Canbus.h"  // don't forget to include these
-#include "defaults.h"
-#include "global.h"
-#include "mcp2515.h"
-#include "mcp2515_defs.h"
-#include "stdlib.h"
-
-#include <math.h>
-
-#include <SoftwareSerial.h>
-//#include "PacketSender.h"
-
-#include <SPI.h>
-#include <Wire.h>
 
 #define LOGO16_GLCD_HEIGHT 64
 #define LOGO16_GLCD_WIDTH  128
@@ -164,10 +160,6 @@ unsigned long noDataTime = noDataThreshold;
 
 #define OVERHEATING 93
 #define REDLINE 12000
-
-
-#define rxPinXBee 8
-#define txPinXBee 9
 
 // defines when to show a warning for either high rpm or high
 // temperature
