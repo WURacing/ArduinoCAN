@@ -36,6 +36,9 @@
 //define the I2C slave address for sensor 1
 #define I2C_SLAVE1_ADDR 0x04
 
+//uncomment to turn on debug mode -- logs messsages to console and only loops 2x per second
+//#define DEBUG
+
 
  // Create the data structure to store the union between a 4-byte array and a float
 union {
@@ -51,7 +54,7 @@ union {
 
 // Chip Select pin is tied to pin 9 on the SparkFun CAN-Bus Shield
 const int chipSelect = 9;  
-#define FILTER_COUNTS 7
+#define FILTER_COUNTS 8
 float last_vals[FILTER_COUNTS];
 int counter = 0;
 
@@ -59,23 +62,25 @@ void setup()
 {
   // Open serial communications and wait for port to open:
   Serial.begin(9600);
-  while (!Serial) {
-    ; // wait for serial port to connect. Needed for Leonardo only
-  }
-
+  #ifdef DEBUG
   Serial.print("Initializing SD card...");
+  #endif
   // make sure that the default chip select pin is set to
   // output, even if you don't use it:
   pinMode(chipSelect, OUTPUT);
 
   // see if the card is present and can be initialized:
   if (!SD.begin(chipSelect)) {
+    #ifdef DEBUG
     Serial.println("Card failed, or not present");
+    #endif
     // don't do anything more:
     return;
   }
+  #ifdef DEBUG
   Serial.println("card initialized.");
-
+  #endif
+  Wire.begin();
   //initialize wheelSpeed float value
   wheelSpeed.fVal = 0.0;
 }
@@ -92,16 +97,19 @@ void loop()
   File dataFile = SD.open("datalog.txt", FILE_WRITE);
 
   // if the file is available, write to it:
+  
   if (dataFile)   {  
-    int timeStamp = millis();
+    unsigned long timeStamp = millis();
     //write to uSD card
     dataFile.print(timeStamp);
     dataFile.print(" ms");
     dataFile.print(", ");
     //output also on Serial monitor for debugging
+    #ifdef DEBUG
     Serial.print(timeStamp);
+    dataFile.print(" ms");
     Serial.print(",");
-
+    #endif
     //request 4 bytes of the float representation from the slave
     for(int i = 0; i < 4; i++)
     {
@@ -118,8 +126,10 @@ void loop()
     	avg += val;
     }
     avg = avg/(float)FILTER_COUNTS;
+    #ifdef DEBUG
     Serial.println(avg);
-    dataFile.println(wheelSpeed.fVal);
+    #endif
+    dataFile.println(avg);
     /*
     // read three sensors on A0, A1, and A2 while appending to the string:
     for (int analogPin = 0; analogPin < 3; analogPin++) 
@@ -145,12 +155,18 @@ void loop()
     dataFile.println(); //create a new row to read data more clearly
     dataFile.close();   //close file
     Serial.println();   //print to the serial port too:
-
+  
   }  
+
   // if the file isn't open, pop up an error:
   else
   {
+    #ifdef DEBUG
     Serial.println("error opening datalog.txt");
+    #endif
 
   } 
+  #ifdef DEBUG
+  delay(500);
+  #endif
 }
