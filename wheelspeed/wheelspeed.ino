@@ -56,7 +56,7 @@ union {
 const int chipSelect = 9;  
 #define FILTER_COUNTS 8
 float last_vals[FILTER_COUNTS];
-int counter = 0;
+uint32_t counter = 0;
 
 void setup()
 {
