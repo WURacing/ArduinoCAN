@@ -48,7 +48,7 @@ void loop()
 {
   //float object_temp = readObjTempC(sensor1);
   for (int j = 0; j < 4; j++) {
-    objectTemps[j] = readObjectTempC(sensorArray[j])
+    objectTemps[j] = readObjectTempC(sensorArray[j]);
     Serial.print("Object " + j + "Temperature: "); 
     Serial.print(objectTemps[j]); Serial.println("*C");
   }
