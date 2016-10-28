@@ -1,5 +1,12 @@
 
-
+/*
+ * Wash U Racing
+ * 
+ * This sketch collects data over CAN from the AEM EMS 4 ecu. It then logs that data in CSV format to an sd card.
+ * 
+ * Make sure you use the libraries included from the ArduinoCAN folder. The libraries in that folder have
+ * been modified to work with the AEM ems4 ecu. 
+ */
 #include <Wire.h>
 #include <SD.h>
 #include <SPI.h>
