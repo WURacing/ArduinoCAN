@@ -22,10 +22,19 @@ const int MESSAGE_TWO = 4294942721;
 const int MESSAGE_THREE = 4294942722;
 const int MESSAGE_FOUR = 4294942723;
 
+const int RLSensorIn = A0; 
+const int RRSensorIn = A1;
+
 const int chipSelect = 9;
+
 File logFile;
 char* filename;
-char* finalFileName;
+char** finalFileName;
+
+int valueRL = 0;
+int valueRR = 0;
+float DispRL; 
+float DispRR;
 
 /* MESSAGE IDS:
   MESSAGE_ONE:
@@ -46,6 +55,12 @@ char* finalFileName;
   byte 5 --> ign timing --> .35156 deg/bit
   bytes 6 and 7 --> battery voltage --> .0002455 V/bit
 */
+
+const int deltaTime = 200;
+unsigned long accumulator = 0;
+
+const float RL_SCALE = 0.07458;
+const float RR_SCALE = 0.07356;
 
 // AEMNet sends all values as integers, which must be converted
 // with a predetermined scale. These scales were obtained from
@@ -94,12 +109,33 @@ void setup() {
   }
   Serial.println("card initialized.");
 
-  filename = "LOGGER00.CSV";
-  for (uint8_t i = 0; i < 100; i++) {
-    filename[6] = i / 10 + '0';
-    filename[7] = i % 10 + '0';
-    if (!SD.exists(filename)) {
-      finalFileName = filename;
+  char* fileprefix[] = {"RPM_LOAD_THROTTLE_COOLANT_","O2_SPEED_GEAR_VOLTAGE_", "SUSPENSION_TRAVEL_"};
+  for(uint8_t j = 0; j < 3; ++j){
+    for (uint8_t i = 0; i < 100; i++) {
+      /*filename[6] = i / 10 + '0';
+      filename[7] = i % 10 + '0';*/
+      sprintf(filename, "%sLOGGER%02d.csv",fileprefix[j],i);
+      if (!SD.exists(filename)) {
+        finalFileName[j] = filename;
+        
+        logFile = SD.open(finalFileName[j]);
+        switch(j) {
+          case 0: {
+            logFile.println("Timestamp, RPM, Engine Load, Throttle, Coolant Temperature");
+            break;
+          }
+          case 1: {
+            logFile.println("Timestamp, O2 Level, Speed, Gear, Voltage");
+            break;
+          }
+          case 2: {
+            logFile.println("Timestamp, RR, RL");
+            break;
+          }
+        }
+        logFile.close();
+        
+      }
     }
   }
 
@@ -107,7 +143,28 @@ void setup() {
 
 void loop() {
 
-  logFile = SD.open(finalFileName, FILE_WRITE);
+  //logFile = SD.open(finalFileName, FILE_WRITE);
+  
+
+  
+  if (millis() - accumulator > deltaTime){
+    valueRL = analogRead(RLSensorIn);
+    valueRR = analogRead(RRSensorIn); 
+    DispRL = abs(RL_SCALE*valueRL - 76.3);
+    DispRR = abs(RR_SCALE*valueRR - 75.25);
+
+    logFile = SD.open(finalFileName[2], FILE_WRITE);
+    
+    logFile.print(millis());
+    logFile.print(", ");
+    logFile.print(DispRR);
+    logFile.print(", ");
+    logFile.print(DispRL);
+    logFile.println();
+
+    logFile.close();
+  }
+  
   tCAN message;
 
   if (mcp2515_check_message()) {
@@ -119,8 +176,12 @@ void loop() {
 
         case MESSAGE_ONE: {
 
-            dataLine = "RPM_LOAD_THROTTLE_COOLANT, ";
+            logFile = SD.open(finalFileName[0], FILE_WRITE);
+            
+            //dataLine = "RPM_LOAD_THROTTLE_COOLANT, ";
             // log rpm
+            dataLine += millis()/1000.0 + ", ";
+            
             uint16_t rawRPM = (uint16_t)message.data[0] << 8;
             rawRPM |= message.data[1];
             rpm = rawRPM * RPM_SCALE;
@@ -150,11 +211,18 @@ void loop() {
             Serial.println(dataLine);
             logFile.println(dataLine);
 
+            logFile.close();
+
             break;
           }
 
         case MESSAGE_FOUR: {
-            dataLine = "O2_SPEED_GEAR_VOLTAGE, ";
+
+            logFile = SD.open(finalFileName[1], FILE_WRITE);
+            
+            //dataLine = "O2_SPEED_GEAR_VOLTAGE, ";
+            dataLine += millis()/1000.0 + ", ";
+            
             //log O2
             uint8_t rawo2 = (uint8_t)message.data[0];
             o2 = rawo2 * O2_SCALE + 0.5;
@@ -179,6 +247,9 @@ void loop() {
             dataLine = dataLine + (millis()/1000);
             Serial.println(dataLine);
             logFile.println(dataLine);
+
+            logFile.close();
+            
             break;
           }
 
@@ -192,5 +263,5 @@ void loop() {
       Serial.println("No data");
     }   
   }
-  logFile.close();
+  //logFile.close();
 }
