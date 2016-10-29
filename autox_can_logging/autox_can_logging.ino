@@ -203,10 +203,7 @@ void loop() {
             //log coolant temp
             int8_t coolantC = message.data[7];
             coolantF = ((double)coolantC * 1.8) + 32;
-            dataLine = dataLine + coolantF + ", ";
-
-            //log time (since arduino started)
-            dataLine = dataLine + (millis()/1000);
+            dataLine = dataLine + coolantF;
            
             Serial.println(dataLine);
             logFile.println(dataLine);
@@ -240,11 +237,8 @@ void loop() {
             uint16_t rawVolts = (uint16_t)message.data[7] << 8;
             rawVolts |= message.data[8];
             volts = rawVolts * BATT_VOLTAGE_SCALE;
-            dataLine = dataLine + volts + ", ";
-
+            dataLine = dataLine + volts;
             
-            // log time (since arduino started)
-            dataLine = dataLine + (millis()/1000);
             Serial.println(dataLine);
             logFile.println(dataLine);
 
