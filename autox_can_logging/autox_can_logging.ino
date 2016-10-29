@@ -25,6 +25,7 @@ const int MESSAGE_FOUR = 4294942723;
 const int chipSelect = 9;
 File logFile;
 char* filename;
+char* finalFileName;
 
 /* MESSAGE IDS:
   MESSAGE_ONE:
@@ -98,9 +99,7 @@ void setup() {
     filename[6] = i / 10 + '0';
     filename[7] = i % 10 + '0';
     if (!SD.exists(filename)) {
-      Serial.println(filename);
-      logFile = SD.open(filename, FILE_WRITE);
-      break;
+      finalFileName = filename;
     }
   }
 
@@ -108,7 +107,7 @@ void setup() {
 
 void loop() {
 
-  logFile = SD.open(filename, FILE_WRITE);
+  logFile = SD.open(finalFileName, FILE_WRITE);
   tCAN message;
 
   if (mcp2515_check_message()) {
@@ -186,7 +185,7 @@ void loop() {
     }
     else {
       Serial.println("No data");
-    }
-    logFile.close();
+    }   
   }
+  logFile.close();
 }
