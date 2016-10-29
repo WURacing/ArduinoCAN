@@ -130,7 +130,7 @@ void loop() {
             uint16_t rawLoad = (uint16_t)message.data[2] << 8;
             rawLoad |= message.data[3];
             load = rawLoad * ENG_LOAD_SCALE;
-            dataLine = dataLine + load + ", ";
+            dataLine = dataLine + load + ", ";m
 
             //log throttle position
             uint16_t rawThrottle = (uint16_t)message.data[4] << 8;
@@ -138,10 +138,14 @@ void loop() {
             throttle = rawThrottle * ENG_THROTTLE_SCALE;
             dataLine = dataLine + throttle + ", ";
 
+
             //log coolant temp
             int8_t coolantC = message.data[7];
             coolantF = ((double)coolantC * 1.8) + 32;
-            dataLine = dataLine + coolantF;
+            dataLine = dataLine + coolantF + ", ";
+
+            //log time (since arduino started)
+            dataLine = dataLine + (millis()/1000);
            
             Serial.println(dataLine);
             logFile.println(dataLine);
@@ -168,8 +172,11 @@ void loop() {
             uint16_t rawVolts = (uint16_t)message.data[7] << 8;
             rawVolts |= message.data[8];
             volts = rawVolts * BATT_VOLTAGE_SCALE;
-            dataLine = dataLine + volts;
+            dataLine = dataLine + volts + ", ";
 
+            
+            // log time (since arduino started)
+            dataLine = dataLine + (millis()/1000);
             Serial.println(dataLine);
             logFile.println(dataLine);
             break;
@@ -178,9 +185,7 @@ void loop() {
         default: {
             break;
           }
-
-          Serial.println();
-          logFile.println();
+          
       }
     }
     else {
