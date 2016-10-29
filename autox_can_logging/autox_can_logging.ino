@@ -28,7 +28,6 @@ const int RRSensorIn = A1;
 
 const int chipSelect = 9;
 
-File logFile;
 String filename;
 String finalFileName[3];
 
@@ -122,7 +121,7 @@ void setup() {
         //copy constructor
         finalFileName[j] = String(filename);
 
-        logFile = SD.open(finalFileName[j].c_str(), FILE_WRITE);
+        File logFile = SD.open(finalFileName[j].c_str(), FILE_WRITE);
         switch(j) {
           
           case 0: {
@@ -163,7 +162,7 @@ void loop() {
     DispRL = abs(RL_SCALE*valueRL - 76.3);
     DispRR = abs(RR_SCALE*valueRR - 75.25);
 
-    logFile = SD.open(finalFileName[2].c_str(), FILE_WRITE);
+    File logFile = SD.open(finalFileName[2].c_str(), FILE_WRITE);
     
     logFile.print(millis());
     logFile.print(", ");
@@ -187,7 +186,7 @@ void loop() {
         case MESSAGE_ONE: {
 
 
-            logFile = SD.open(finalFileName[0].c_str(), FILE_WRITE);
+            File logFile = SD.open(finalFileName[0].c_str(), FILE_WRITE);
             
             //dataLine = "RPM_LOAD_THROTTLE_COOLANT, ";
             // log rpm
@@ -227,7 +226,7 @@ void loop() {
 
         case MESSAGE_FOUR: {
 
-            logFile = SD.open(finalFileName[1].c_str(), FILE_WRITE);
+            File logFile = SD.open(finalFileName[1].c_str(), FILE_WRITE);
             
             //dataLine = "O2_SPEED_GEAR_VOLTAGE, ";
             dataLine += millis()/1000.0;
