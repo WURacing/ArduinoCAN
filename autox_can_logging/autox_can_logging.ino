@@ -10,6 +10,7 @@
 #include <Wire.h>
 #include <SD.h>
 #include <SPI.h>
+#include <stdio.h>
 #include "Canbus.h"  // don't forget to include these
 #include "defaults.h"
 #include "global.h"
@@ -28,8 +29,8 @@ const int RRSensorIn = A1;
 const int chipSelect = 9;
 
 File logFile;
-char* filename;
-char** finalFileName;
+String filename;
+char* finalFileName[3];
 
 int valueRL = 0;
 int valueRR = 0;
@@ -109,18 +110,28 @@ void setup() {
   }
   Serial.println("card initialized.");
 
-  char* fileprefix[] = {"RPM_LOAD_THROTTLE_COOLANT_","O2_SPEED_GEAR_VOLTAGE_", "SUSPENSION_TRAVEL_"};
-  for(uint8_t j = 0; j < 3; ++j){
-    for (uint8_t i = 0; i < 100; i++) {
-      /*filename[6] = i / 10 + '0';
-      filename[7] = i % 10 + '0';*/
-      sprintf(filename, "%sLOGGER%02d.csv",fileprefix[j],i);
-      if (!SD.exists(filename)) {
-        finalFileName[j] = filename;
+  String fileprefix[] = {"RPM_LOAD_THROTTLE_COOLANT_","O2_SPEED_GEAR_VOLTAGE_", "SUSPENSION_TRAVEL_"};
+  for(int j = 0; j < 3; ++j){
+ 
+    for (int i = 0; i < 100; i++) {
+
+      //std::sprintf(filename, "%sLOGGER%02d.csv",fileprefix[j],i);
+      filename = ""+fileprefix[j] + "LOGGER" + i + ".csv";
+      Serial.println(filename);
+      char* charFileName = filename.c_str();
+ 
+      if (!SD.exists(charFileName)) {
+        Serial.println("passed conditional");
+        finalFileName[j] = charFileName;
+
         
-        logFile = SD.open(finalFileName[j]);
+        logFile = SD.open(finalFileName[j], FILE_WRITE);
+        logFile.println("test");
+        logFile.close();
         switch(j) {
+          
           case 0: {
+
             logFile.println("Timestamp, RPM, Engine Load, Throttle, Coolant Temperature");
             break;
           }
@@ -132,8 +143,12 @@ void setup() {
             logFile.println("Timestamp, RR, RL");
             break;
           }
+
+      
         }
         logFile.close();
+
+        break;
         
       }
     }
@@ -145,7 +160,9 @@ void loop() {
 
   //logFile = SD.open(finalFileName, FILE_WRITE);
   
-
+  for(int i=0; i<3; ++i){
+    Serial.println(finalFileName[i]);
+    }
   
   if (millis() - accumulator > deltaTime){
     valueRL = analogRead(RLSensorIn);
@@ -176,11 +193,13 @@ void loop() {
 
         case MESSAGE_ONE: {
 
+
             logFile = SD.open(finalFileName[0], FILE_WRITE);
             
             //dataLine = "RPM_LOAD_THROTTLE_COOLANT, ";
             // log rpm
-            dataLine += millis()/1000.0 + ", ";
+            dataLine += millis()/1000.0;
+            dataLine += ", ";
             
             uint16_t rawRPM = (uint16_t)message.data[0] << 8;
             rawRPM |= message.data[1];
@@ -191,7 +210,7 @@ void loop() {
             uint16_t rawLoad = (uint16_t)message.data[2] << 8;
             rawLoad |= message.data[3];
             load = rawLoad * ENG_LOAD_SCALE;
-            dataLine = dataLine + load + ", ";m
+            dataLine = dataLine + load + ", ";
 
             //log throttle position
             uint16_t rawThrottle = (uint16_t)message.data[4] << 8;
@@ -218,8 +237,8 @@ void loop() {
             logFile = SD.open(finalFileName[1], FILE_WRITE);
             
             //dataLine = "O2_SPEED_GEAR_VOLTAGE, ";
-            dataLine += millis()/1000.0 + ", ";
-            
+            dataLine += millis()/1000.0;
+            dataLine += ", ";
             //log O2
             uint8_t rawo2 = (uint8_t)message.data[0];
             o2 = rawo2 * O2_SCALE + 0.5;
