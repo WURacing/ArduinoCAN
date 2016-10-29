@@ -1,12 +1,12 @@
 
 /*
- * Wash U Racing
- * 
- * This sketch collects data over CAN from the AEM EMS 4 ecu. It then logs that data in CSV format to an sd card.
- * 
- * Make sure you use the libraries included from the ArduinoCAN folder. The libraries in that folder have
- * been modified to work with the AEM ems4 ecu. 
- */
+   Wash U Racing
+
+   This sketch collects data over CAN from the AEM EMS 4 ecu. It then logs that data in CSV format to an sd card.
+
+   Make sure you use the libraries included from the ArduinoCAN folder. The libraries in that folder have
+   been modified to work with the AEM ems4 ecu.
+*/
 #include <Wire.h>
 #include <SD.h>
 #include <SPI.h>
@@ -23,7 +23,8 @@ const int MESSAGE_THREE = 4294942722;
 const int MESSAGE_FOUR = 4294942723;
 
 const int chipSelect = 9;
-File dataFile;
+File logFile;
+char* filename;
 
 /* MESSAGE IDS:
   MESSAGE_ONE:
@@ -79,40 +80,42 @@ void setup() {
 
   delay(500);
 
- Serial.print("Initializing SD card...");
+  Serial.print("Initializing SD card...");
 
- pinMode(chipSelect, OUTPUT);
- 
- if (!SD.begin(chipSelect)) {
-   
+  pinMode(chipSelect, OUTPUT);
+
+  if (!SD.begin(chipSelect)) {
+
     Serial.println("Card failed, or not present");
-    
+
     // don't do anything more:
     return;
-  } 
+  }
   Serial.println("card initialized.");
 
-  char file[] = "log00.csv";
+  filename = "LOGGER00.CSV";
+  for (uint8_t i = 0; i < 100; i++) {
+    filename[6] = i / 10 + '0';
+    filename[7] = i % 10 + '0';
+    if (!SD.exists(filename)) {
+      Serial.println(filename);
+      logFile = SD.open(filename, FILE_WRITE);
+      break;
+    }
+  }
 
-  for (uint8_t i = 0; i<100; ++i){
-      file[3] = i/10 + '0';
-      file[4] = i%10 + '0';
-
-      if(!SD.exists(file)){
-        dataFile = SD.open(file, FILE_WRITE);
-      }  
-  }  
 }
 
 void loop() {
 
+  logFile = SD.open(filename, FILE_WRITE);
   tCAN message;
 
   if (mcp2515_check_message()) {
     if (mcp2515_get_message(&message)) {
 
       String dataLine = "";
-     
+
       switch (message.id) {
 
         case MESSAGE_ONE: {
@@ -120,7 +123,7 @@ void loop() {
             dataLine = "RPM_LOAD_THROTTLE_COOLANT, ";
             // log rpm
             uint16_t rawRPM = (uint16_t)message.data[0] << 8;
-            rawRPM |= message.data[1]; 
+            rawRPM |= message.data[1];
             rpm = rawRPM * RPM_SCALE;
             dataLine = dataLine + rpm + ", ";
 
@@ -138,12 +141,12 @@ void loop() {
 
             //log coolant temp
             int8_t coolantC = message.data[7];
-            coolantF = ((double)coolantC * 1.8) + 32;     
+            coolantF = ((double)coolantC * 1.8) + 32;
             dataLine = dataLine + coolantF;
-
+           
             Serial.println(dataLine);
-            dataFile.println(dataLine);
-            
+            logFile.println(dataLine);
+
             break;
           }
 
@@ -153,7 +156,7 @@ void loop() {
             uint8_t rawo2 = (uint8_t)message.data[0];
             o2 = rawo2 * O2_SCALE + 0.5;
             dataLine = dataLine + o2 +  ", ";
-            
+
 
             uint16_t rawSpeed = (uint16_t)message.data[2] << 8;
             rawSpeed |= message.data[3];
@@ -169,21 +172,21 @@ void loop() {
             dataLine = dataLine + volts;
 
             Serial.println(dataLine);
-            dataFile.println(dataLine);      
+            logFile.println(dataLine);
             break;
           }
 
         default: {
             break;
-      }
+          }
 
-      Serial.println();
-      dataFile.println();
+          Serial.println();
+          logFile.println();
+      }
     }
+    else {
+      Serial.println("No data");
+    }
+    logFile.close();
   }
-  else {
-    Serial.println("No data");
-  }
-  dataFile.close();
-}
 }
