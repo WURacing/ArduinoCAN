@@ -22,6 +22,19 @@ const int MESSAGE_TWO = 4294942721;
 const int MESSAGE_THREE = 4294942722;
 const int MESSAGE_FOUR = 4294942723;
 
+
+
+const int RLSensorIn = A0;
+const int RRSensorIn = A1;
+const float RL_SCALE = 0.07458;
+const float RR_SCALE = 0.07356;
+int valueRL = 0;
+int valueRR = 0;
+float DispRL;
+float DispRR;
+
+const int deltaTime = 200;
+unsigned long accumulator = 0;
 const int chipSelect = 9;
 File logFile;
 char* filename;
@@ -100,6 +113,7 @@ void setup() {
     filename[7] = i % 10 + '0';
     if (!SD.exists(filename)) {
       finalFileName = filename;
+      break;
     }
   }
 
@@ -114,6 +128,24 @@ void loop() {
     if (mcp2515_get_message(&message)) {
 
       String dataLine = "";
+
+      if (millis() - accumulator > deltaTime){
+        valueRL = analogRead(RLSensorIn);
+        valueRR = analogRead(RRSensorIn); 
+        DispRL = abs(RL_SCALE*valueRL - 76.3);
+        DispRR = abs(RR_SCALE*valueRR - 75.25);
+        
+        
+        
+        logFile.print(DispRR);
+        logFile.print(", ");
+        logFile.print(DispRL);
+        logFile.print(", ");
+        logFile.print(millis()/1000.0);
+        logFile.println();
+
+      }
+      
 
       switch (message.id) {
 
@@ -130,7 +162,7 @@ void loop() {
             uint16_t rawLoad = (uint16_t)message.data[2] << 8;
             rawLoad |= message.data[3];
             load = rawLoad * ENG_LOAD_SCALE;
-            dataLine = dataLine + load + ", ";m
+            dataLine = dataLine + load + ", ";
 
             //log throttle position
             uint16_t rawThrottle = (uint16_t)message.data[4] << 8;
@@ -145,7 +177,7 @@ void loop() {
             dataLine = dataLine + coolantF + ", ";
 
             //log time (since arduino started)
-            dataLine = dataLine + (millis()/1000);
+            dataLine = dataLine + (millis()/1000.0);
            
             Serial.println(dataLine);
             logFile.println(dataLine);
@@ -176,7 +208,7 @@ void loop() {
 
             
             // log time (since arduino started)
-            dataLine = dataLine + (millis()/1000);
+            dataLine = dataLine + (millis()/1000.0);
             Serial.println(dataLine);
             logFile.println(dataLine);
             break;
