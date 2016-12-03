@@ -10,6 +10,7 @@
 #include <Wire.h>
 #include <SD.h>
 #include <SPI.h>
+#include <stdio.h>
 #include "Canbus.h"  // don't forget to include these
 #include "defaults.h"
 #include "global.h"
@@ -22,6 +23,7 @@ const int MESSAGE_TWO = 4294942721;
 const int MESSAGE_THREE = 4294942722;
 const int MESSAGE_FOUR = 4294942723;
 
+<<<<<<< HEAD
 
 
 const int RLSensorIn = A0;
@@ -35,10 +37,20 @@ float DispRR;
 
 const int deltaTime = 200;
 unsigned long accumulator = 0;
+=======
+const int RLSensorIn = A0; 
+const int RRSensorIn = A1;
+
+>>>>>>> 15a64a0876dfb4d67997c3e5257c0a50ce34ea57
 const int chipSelect = 9;
-File logFile;
-char* filename;
-char* finalFileName;
+
+String filename;
+String finalFileName[3];
+
+int valueRL = 0;
+int valueRR = 0;
+float DispRL; 
+float DispRR;
 
 /* MESSAGE IDS:
   MESSAGE_ONE:
@@ -59,6 +71,12 @@ char* finalFileName;
   byte 5 --> ign timing --> .35156 deg/bit
   bytes 6 and 7 --> battery voltage --> .0002455 V/bit
 */
+
+const int deltaTime = 200;
+unsigned long accumulator = 0;
+
+const float RL_SCALE = 0.07458;
+const float RR_SCALE = 0.07356;
 
 // AEMNet sends all values as integers, which must be converted
 // with a predetermined scale. These scales were obtained from
@@ -107,6 +125,7 @@ void setup() {
   }
   Serial.println("card initialized.");
 
+<<<<<<< HEAD
   filename = "LOGGER00.CSV";
   for (uint8_t i = 0; i < 100; i++) {
     filename[6] = i / 10 + '0';
@@ -114,6 +133,42 @@ void setup() {
     if (!SD.exists(filename)) {
       finalFileName = filename;
       break;
+=======
+  String fileprefix[] = {"RPM_LOAD_THROTTLE_COOLANT_","O2_SPEED_GEAR_VOLTAGE_", "SUSPENSION_TRAVEL_"};
+  for(int j = 0; j < 3; ++j){
+ 
+    for (int i = 0; i < 100; i++) {
+      filename = ""+fileprefix[j] + "LOGGER" + i + ".csv";
+      Serial.println(filename);
+      if (!SD.exists(filename.c_str())) {
+        Serial.println("passed conditional");
+        
+        //copy constructor
+        finalFileName[j] = String(filename);
+
+        File logFile = SD.open(finalFileName[j].c_str(), FILE_WRITE);
+        switch(j) {
+          
+          case 0: {
+
+            logFile.println("Timestamp, RPM, Engine Load, Throttle, Coolant Temperature");
+            break;
+          }
+          case 1: {
+            logFile.println("Timestamp, O2 Level, Speed, Gear, Voltage");
+            break;
+          }
+          case 2: {
+            logFile.println("Timestamp, RR, RL");
+            break;
+          }
+        }
+        logFile.close();
+
+        break;
+        
+      }
+>>>>>>> 15a64a0876dfb4d67997c3e5257c0a50ce34ea57
     }
   }
 
@@ -121,7 +176,30 @@ void setup() {
 
 void loop() {
 
-  logFile = SD.open(finalFileName, FILE_WRITE);
+  //logFile = SD.open(finalFileName, FILE_WRITE);
+  
+  for(int i=0; i<3; ++i){
+    Serial.println(finalFileName[i].c_str());
+    }
+  
+  if (millis() - accumulator > deltaTime){
+    valueRL = analogRead(RLSensorIn);
+    valueRR = analogRead(RRSensorIn); 
+    DispRL = abs(RL_SCALE*valueRL - 76.3);
+    DispRR = abs(RR_SCALE*valueRR - 75.25);
+
+    File logFile = SD.open(finalFileName[2].c_str(), FILE_WRITE);
+    
+    logFile.print(millis());
+    logFile.print(", ");
+    logFile.print(DispRR);
+    logFile.print(", ");
+    logFile.print(DispRL);
+    logFile.println();
+
+    logFile.close();
+  }
+  
   tCAN message;
 
   if (mcp2515_check_message()) {
@@ -151,8 +229,14 @@ void loop() {
 
         case MESSAGE_ONE: {
 
-            dataLine = "RPM_LOAD_THROTTLE_COOLANT, ";
+
+            File logFile = SD.open(finalFileName[0].c_str(), FILE_WRITE);
+            
+            //dataLine = "RPM_LOAD_THROTTLE_COOLANT, ";
             // log rpm
+            dataLine += millis()/1000.0;
+            dataLine += ", ";
+            
             uint16_t rawRPM = (uint16_t)message.data[0] << 8;
             rawRPM |= message.data[1];
             rpm = rawRPM * RPM_SCALE;
@@ -174,19 +258,30 @@ void loop() {
             //log coolant temp
             int8_t coolantC = message.data[7];
             coolantF = ((double)coolantC * 1.8) + 32;
+<<<<<<< HEAD
             dataLine = dataLine + coolantF + ", ";
 
             //log time (since arduino started)
             dataLine = dataLine + (millis()/1000.0);
+=======
+            dataLine = dataLine + coolantF;
+>>>>>>> 15a64a0876dfb4d67997c3e5257c0a50ce34ea57
            
             Serial.println(dataLine);
             logFile.println(dataLine);
+
+            logFile.close();
 
             break;
           }
 
         case MESSAGE_FOUR: {
-            dataLine = "O2_SPEED_GEAR_VOLTAGE, ";
+
+            File logFile = SD.open(finalFileName[1].c_str(), FILE_WRITE);
+            
+            //dataLine = "O2_SPEED_GEAR_VOLTAGE, ";
+            dataLine += millis()/1000.0;
+            dataLine += ", ";
             //log O2
             uint8_t rawo2 = (uint8_t)message.data[0];
             o2 = rawo2 * O2_SCALE + 0.5;
@@ -204,13 +299,18 @@ void loop() {
             uint16_t rawVolts = (uint16_t)message.data[7] << 8;
             rawVolts |= message.data[8];
             volts = rawVolts * BATT_VOLTAGE_SCALE;
-            dataLine = dataLine + volts + ", ";
-
+            dataLine = dataLine + volts;
             
+<<<<<<< HEAD
             // log time (since arduino started)
             dataLine = dataLine + (millis()/1000.0);
+=======
+>>>>>>> 15a64a0876dfb4d67997c3e5257c0a50ce34ea57
             Serial.println(dataLine);
             logFile.println(dataLine);
+
+            logFile.close();
+            
             break;
           }
 
@@ -224,5 +324,5 @@ void loop() {
       Serial.println("No data");
     }   
   }
-  logFile.close();
+  //logFile.close();
 }
