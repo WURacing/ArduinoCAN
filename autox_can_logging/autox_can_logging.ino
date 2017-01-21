@@ -33,11 +33,19 @@ const int RRSensorIn = A1;
 const int rxPinXBee = 12;
 const int txPinXBee = 13;
 
+const int rxPinDisplay = 10;
+const int txPinDisplay = 11;
+
 SoftwareSerial XBee_Serial(rxPinXBee,txPinXBee);
 PacketSender XBee(XBee_Serial, 9600);
 
+SoftwareSerial Display_Serial(rxPinDisplay,txPinDisplay);
+PacketSender Display(Display_Serial, 9600);
+
 const float RL_SCALE = 0.07458;
 const float RR_SCALE = 0.07356;
+const float RL_OFFSET = 76.3;
+const float RR_OFFSET = 75.25;
 int valueRL = 0;
 int valueRR = 0;
 float DispRL; //key: 0x38
@@ -142,8 +150,8 @@ void loop() {
       if (millis() - accumulator > deltaTime){
         valueRL = analogRead(RLSensorIn);
         valueRR = analogRead(RRSensorIn); 
-        DispRL = abs(RL_SCALE*valueRL - 76.3);
-        DispRR = abs(RR_SCALE*valueRR - 75.25);
+        DispRL = abs(RL_SCALE*valueRL - RL_OFFSET);
+        DispRR = abs(RR_SCALE*valueRR - RR_OFFSET);
 
         payload outgoing;
         
@@ -177,6 +185,7 @@ void loop() {
 
             outgoing.floatData = rpm;
             XBee.sendPayloadTimestamp(outgoing, 0x30);
+            Display.sendPayload(outgoing, 0x30);
 
             //log engine load
             uint16_t rawLoad = (uint16_t)message.data[2] << 8;
@@ -186,6 +195,7 @@ void loop() {
 
             outgoing.floatData = load;
             XBee.sendPayloadTimestamp(outgoing, 0x31);
+            Display.sendPayload(outgoing, 0x31);
 
             //log throttle position
             uint16_t rawThrottle = (uint16_t)message.data[4] << 8;
@@ -195,6 +205,7 @@ void loop() {
 
             outgoing.floatData = throttle;
             XBee.sendPayloadTimestamp(outgoing, 0x32);
+            Display.sendPayload(outgoing, 0x32);
 
             //log coolant temp
             int8_t coolantC = message.data[7];
@@ -203,6 +214,7 @@ void loop() {
 
             outgoing.floatData = coolantF;
             XBee.sendPayloadTimestamp(outgoing, 0x33);
+            Display.sendPayload(outgoing, 0x33);
 
             //log time (since arduino started)
             dataLine = dataLine + (millis()/1000.0);
@@ -230,11 +242,13 @@ void loop() {
 
             outgoing.floatData = vehicleSpeed;
             XBee.sendPayloadTimestamp(outgoing, 0x35);
+            Display.sendPayload(outgoing, 0x35);
 
             gear = message.data[4];
             dataLine = dataLine + gear + ", ";
 
             XBee.sendByteTimestamp(gear, 0x36);
+            Display.sendByte(gear, 0x36);
 
             uint16_t rawVolts = (uint16_t)message.data[7] << 8;
             rawVolts |= message.data[8];
