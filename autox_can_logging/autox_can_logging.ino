@@ -278,3 +278,19 @@ void loop() {
   }
   logFile.close();
 }
+
+int test_rpm() {
+  float rpm = 8000;
+  Display.sendPayload(rpm, 0x30);
+}
+
+int test_temp() {
+  float temp = 100;
+  Display.sendPayload(temp, 0x33);
+}
+
+int test_gear() {
+  Display.sendByte(0x05, 0x36);
+}
+
+
