@@ -33,14 +33,14 @@ const int RRSensorIn = A1;
 const int rxPinXBee = 12;
 const int txPinXBee = 13;
 
-const int rxPinDisplay = 10;
-const int txPinDisplay = 11;
+//const int rxPinDisplay = 10;
+//const int txPinDisplay = 11;
 
 SoftwareSerial XBee_Serial(rxPinXBee,txPinXBee);
 PacketSender XBee(XBee_Serial, 9600);
 
-SoftwareSerial Display_Serial(rxPinDisplay,txPinDisplay);
-PacketSender Display(Display_Serial, 9600);
+//SoftwareSerial Display_Serial(rxPinDisplay,txPinDisplay);
+HardwareSender Display = HardwareSender();
 
 const float RL_SCALE = 0.07458;
 const float RR_SCALE = 0.07356;
@@ -279,7 +279,7 @@ void loop() {
   logFile.close();
 }
 
-int test_rpm() {
+/*int test_rpm() {
   float rpm = 8000;
   Display.sendPayload(rpm, 0x30);
 }
@@ -291,6 +291,6 @@ int test_temp() {
 
 int test_gear() {
   Display.sendByte(0x05, 0x36);
-}
+}*/
 
 
