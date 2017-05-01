@@ -30,16 +30,14 @@ const int MESSAGE_FOUR = 4294942723;
 const int RLSensorIn = A0;
 const int RRSensorIn = A1;
 
-const int rxPinXBee = 12;
-const int txPinXBee = 13;
+const int rxPinXBee = A3;
+const int txPinXBee = A4;
 
 //const int rxPinDisplay = 10;
 //const int txPinDisplay = 11;
 
 SoftwareSerial XBee_Serial(rxPinXBee,txPinXBee);
 PacketSender XBee(XBee_Serial, 9600);
-
-//SoftwareSerial Display_Serial(rxPinDisplay,txPinDisplay);
 HardwareSender Display = HardwareSender();
 
 const float RL_SCALE = 0.07458;
@@ -104,15 +102,15 @@ void setup() {
   Serial.begin(9600);
 
   if (Canbus.init(CANSPEED_500)) {
-    Serial.println("CAN Init ok");
+    //Serial.println("CAN Init ok");
   }
   else {
-    Serial.println("Couldn't Init CAN");
+    //Serial.println("Couldn't Init CAN");
   }
 
   delay(500);
 
-  Serial.print("Initializing SD card...");
+  /*Serial.print("Initializing SD card...");
 
   pinMode(chipSelect, OUTPUT);
 
@@ -133,42 +131,40 @@ void setup() {
       finalFileName = filename;
       break;
     }
-  }
+  }*/
 
 }
 
 void loop() {
 
-  logFile = SD.open(finalFileName, FILE_WRITE);
+  //logFile = SD.open(finalFileName, FILE_WRITE);
   tCAN message;
+  /*if (millis() - accumulator > deltaTime){
+    valueRL = analogRead(RLSensorIn);
+    valueRR = analogRead(RRSensorIn); 
+    DispRL = abs(RL_SCALE*valueRL - RL_OFFSET);
+    DispRR = abs(RR_SCALE*valueRR - RR_OFFSET);
+  
+    payload outgoing;
+    
+    outgoing.floatData = DispRR;
+    XBee.sendPayloadTimestamp(outgoing, 0x38);
+  
+    outgoing.floatData = DispRL;
+    XBee.sendPayloadTimestamp(outgoing, 0x39);
+    
+    logFile.print(DispRR);
+    logFile.print(", ");
+    logFile.print(DispRL);
+    logFile.print(", ");
+    logFile.print(millis()/1000.0);
+    logFile.println();
+  }*/
 
   if (mcp2515_check_message()) {
     if (mcp2515_get_message(&message)) {
 
       String dataLine = "";
-
-      if (millis() - accumulator > deltaTime){
-        valueRL = analogRead(RLSensorIn);
-        valueRR = analogRead(RRSensorIn); 
-        DispRL = abs(RL_SCALE*valueRL - RL_OFFSET);
-        DispRR = abs(RR_SCALE*valueRR - RR_OFFSET);
-
-        payload outgoing;
-        
-        outgoing.floatData = DispRR;
-        XBee.sendPayloadTimestamp(outgoing, 0x38);
-
-        outgoing.floatData = DispRL;
-        XBee.sendPayloadTimestamp(outgoing, 0x39);
-        
-        logFile.print(DispRR);
-        logFile.print(", ");
-        logFile.print(DispRL);
-        logFile.print(", ");
-        logFile.print(millis()/1000.0);
-        logFile.println();
-
-      }
       
       payload outgoing;
 
@@ -176,12 +172,12 @@ void loop() {
 
         case MESSAGE_ONE: {
 
-            dataLine = "RPM_LOAD_THROTTLE_COOLANT, ";
+            //dataLine = "RPM_LOAD_THROTTLE_COOLANT, ";
             // log rpm
             uint16_t rawRPM = (uint16_t)message.data[0] << 8;
             rawRPM |= message.data[1];
             rpm = rawRPM * RPM_SCALE;
-            dataLine = dataLine + rpm + ", ";
+            //dataLine = dataLine + rpm + ", ";
 
             outgoing.floatData = rpm;
             XBee.sendPayloadTimestamp(outgoing, 0x30);
@@ -191,46 +187,46 @@ void loop() {
             uint16_t rawLoad = (uint16_t)message.data[2] << 8;
             rawLoad |= message.data[3];
             load = rawLoad * ENG_LOAD_SCALE;
-            dataLine = dataLine + load + ", ";
+            //dataLine = dataLine + load + ", ";
 
             outgoing.floatData = load;
             XBee.sendPayloadTimestamp(outgoing, 0x31);
-            Display.sendPayload(outgoing, 0x31);
+            //Display.sendPayload(outgoing, 0x31);
 
             //log throttle position
             uint16_t rawThrottle = (uint16_t)message.data[4] << 8;
             rawThrottle |= message.data[5];
             throttle = rawThrottle * ENG_THROTTLE_SCALE;
-            dataLine = dataLine + throttle + ", ";
+            //dataLine = dataLine + throttle + ", ";
 
             outgoing.floatData = throttle;
             XBee.sendPayloadTimestamp(outgoing, 0x32);
-            Display.sendPayload(outgoing, 0x32);
+            //Display.sendPayload(outgoing, 0x32);
 
             //log coolant temp
             int8_t coolantC = message.data[7];
             coolantF = ((double)coolantC * 1.8) + 32;
-            dataLine = dataLine + coolantF + ", ";
+            //dataLine = dataLine + coolantF + ", ";
 
             outgoing.floatData = coolantF;
             XBee.sendPayloadTimestamp(outgoing, 0x33);
             Display.sendPayload(outgoing, 0x33);
 
             //log time (since arduino started)
-            dataLine = dataLine + (millis()/1000.0);
+            //dataLine = dataLine + (millis()/1000.0);
            
-            Serial.println(dataLine);
-            logFile.println(dataLine);
+            //Serial.println(dataLine);
+            //logFile.println(dataLine);
 
             break;
           }
 
         case MESSAGE_FOUR: {
-            dataLine = "O2_SPEED_GEAR_VOLTAGE, ";
+            //dataLine = "O2_SPEED_GEAR_VOLTAGE, ";
             //log O2
             uint8_t rawo2 = (uint8_t)message.data[0];
             o2 = rawo2 * O2_SCALE + 0.5;
-            dataLine = dataLine + o2 +  ", ";
+            //dataLine = dataLine + o2 +  ", ";
 
             outgoing.floatData = o2;
             XBee.sendPayloadTimestamp(outgoing, 0x34);
@@ -238,31 +234,32 @@ void loop() {
             uint16_t rawSpeed = (uint16_t)message.data[2] << 8;
             rawSpeed |= message.data[3];
             vehicleSpeed = rawSpeed * SPEED_SCALE;
-            dataLine = dataLine + vehicleSpeed + ", ";
+            //dataLine = dataLine + vehicleSpeed + ", ";
 
             outgoing.floatData = vehicleSpeed;
             XBee.sendPayloadTimestamp(outgoing, 0x35);
-            Display.sendPayload(outgoing, 0x35);
+            //Display.sendPayload(outgoing, 0x35);
 
             gear = message.data[4];
-            dataLine = dataLine + gear + ", ";
+            //dataLine = dataLine + gear + ", ";
 
             XBee.sendByteTimestamp(gear, 0x36);
-            Display.sendByte(gear, 0x36);
+            //Display.sendByte(gear, 0x36);
 
             uint16_t rawVolts = (uint16_t)message.data[7] << 8;
             rawVolts |= message.data[8];
             volts = rawVolts * BATT_VOLTAGE_SCALE;
-            dataLine = dataLine + volts + ", ";
+            //dataLine = dataLine + volts + ", ";
 
             outgoing.floatData = volts;
             XBee.sendPayloadTimestamp(outgoing, 0x37);
+            Display.sendPayload(outgoing, 0x37);
 
             
             // log time (since arduino started)
-            dataLine = dataLine + (millis()/1000.0);
-            Serial.println(dataLine);
-            logFile.println(dataLine);
+            //dataLine = dataLine + (millis()/1000.0);
+            //Serial.println(dataLine);
+            //logFile.println(dataLine);
             break;
           }
 
@@ -273,10 +270,10 @@ void loop() {
       }
     }
     else {
-      Serial.println("No data");
+      //Serial.println("No data");
     }   
   }
-  logFile.close();
+  //logFile.close();
 }
 
 /*int test_rpm() {
