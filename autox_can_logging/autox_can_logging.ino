@@ -33,6 +33,9 @@ const int RRSensorIn = A1;
 const int rxPinXBee = A3;
 const int txPinXBee = A4;
 
+const int frontBrake = A5;
+const int backBrake = A6;
+
 //const int rxPinDisplay = 10;
 //const int txPinDisplay = 11;
 
@@ -46,8 +49,12 @@ const float RL_OFFSET = 76.3;
 const float RR_OFFSET = 75.25;
 int valueRL = 0;
 int valueRR = 0;
+int valueFB = 0;
+int valueBB = 0;
 float DispRL; //key: 0x38
 float DispRR; //key: 0x39
+float DispFB;
+float DispBB;
 
 const int deltaTime = 200;
 unsigned long accumulator = 0;
@@ -139,11 +146,15 @@ void loop() {
 
   //logFile = SD.open(finalFileName, FILE_WRITE);
   tCAN message;
-  /*if (millis() - accumulator > deltaTime){
+  if (millis() - accumulator > deltaTime){
     valueRL = analogRead(RLSensorIn);
     valueRR = analogRead(RRSensorIn); 
     DispRL = abs(RL_SCALE*valueRL - RL_OFFSET);
-    DispRR = abs(RR_SCALE*valueRR - RR_OFFSET);
+    DispRR = abs(RR_SCALE*valueRR - RR_OFFSET); 
+    valueFB = analogRead(frontBrake);
+    valueBB = analogRead(backBrake);
+    DispFB = (valueFB*6.106) - 621.63;
+    DispBB = (valueBB*6.106) - 621.63;
   
     payload outgoing;
     
@@ -152,14 +163,16 @@ void loop() {
   
     outgoing.floatData = DispRL;
     XBee.sendPayloadTimestamp(outgoing, 0x39);
+
+    outgoing.floatData = DispFB;
+    XBee.sendPayloadTimestamp(outgoing, 0x40);
+
+    outgoing.floatData = DispBB;
+    XBee.sendPayloadTimestamp(outgoing, 0x41);
+
+    accumulator += deltaTime;
     
-    logFile.print(DispRR);
-    logFile.print(", ");
-    logFile.print(DispRL);
-    logFile.print(", ");
-    logFile.print(millis()/1000.0);
-    logFile.println();
-  }*/
+  }
 
   if (mcp2515_check_message()) {
     if (mcp2515_get_message(&message)) {
@@ -186,7 +199,7 @@ void loop() {
             //log engine load
             uint16_t rawLoad = (uint16_t)message.data[2] << 8;
             rawLoad |= message.data[3];
-            load = rawLoad * ENG_LOAD_SCALE;
+            load = 100.0 - (rawLoad * ENG_LOAD_SCALE);
             //dataLine = dataLine + load + ", ";
 
             outgoing.floatData = load;
