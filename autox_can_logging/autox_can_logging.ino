@@ -25,6 +25,8 @@ const int MESSAGE_TWO = 4294942721;
 const int MESSAGE_THREE = 4294942722;
 const int MESSAGE_FOUR = 4294942723;
 
+const int MESSAGE_FIVE = 0xFFFF9E4C;
+const int MESSAGE_SIX = 0xFFFFD824;
 
 
 const int RLSensorIn = A0;
@@ -34,7 +36,7 @@ const int rxPinXBee = A3;
 const int txPinXBee = A4;
 
 const int frontBrake = A5;
-const int backBrake = A6;
+const int backBrake = A2;
 
 //const int rxPinDisplay = 10;
 //const int txPinDisplay = 11;
@@ -275,6 +277,11 @@ void loop() {
             //logFile.println(dataLine);
             break;
           }
+
+        case MESSAGE_FIVE:
+        case MESSAGE_SIX: {
+          break;
+        }
 
         default: {
             break;
