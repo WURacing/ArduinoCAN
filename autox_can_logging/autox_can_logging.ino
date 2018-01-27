@@ -9,24 +9,30 @@
 */
 #include <Wire.h>
 #include <SD.h>
+#include <mcp_can.h>
 #include <SPI.h>
 #include <SoftwareSerial.h>
-#include "Canbus.h"  // don't forget to include these
 #include "defaults.h"
 #include "global.h"
-#include "mcp2515.h"
-#include "mcp2515_defs.h"
 #include "stdlib.h"
 #include "PacketSender.h"
 
-
-const int MESSAGE_ONE = 4294942720;
-const int MESSAGE_TWO = 4294942721;
-const int MESSAGE_THREE = 4294942722;
-const int MESSAGE_FOUR = 4294942723;
-
+const int MESSAGE_ONE = 2180030467;
+const int MESSAGE_TWO = 2180030466;
+const int MESSAGE_THREE = 2180030465;
+const int MESSAGE_FOUR = 2180030464;
+// 5 & 6 not managed by ECU
 const int MESSAGE_FIVE = 0xFFFF9E4C;
 const int MESSAGE_SIX = 0xFFFFD824;
+
+//CAN Variables Setup
+long unsigned int rxId;
+unsigned char len = 0;
+unsigned char rxBuf[8];
+// char msgString[128];
+
+#define CAN0_INT 4
+MCP_CAN CAN0(10)
 
 
 const int RLSensorIn = A0;
@@ -110,12 +116,15 @@ double volts;         //key: 0x37
 void setup() {
   Serial.begin(9600);
 
-  if (Canbus.init(CANSPEED_500)) {
-    //Serial.println("CAN Init ok");
+  //INIT Can Communications
+  if (CAN0.begin(MCP_ANY, CAN_500KBPS, MCP_16MHZ) == CAN_OK) {
+      //Serial.println("MCP2515 Initialized Successfully!");
+  } else {
+      //Serial.println("Error Initializing MCP2515...");
   }
-  else {
-    //Serial.println("Couldn't Init CAN");
-  }
+
+  CAN0.setMode(MCP_NORMAL); // send acknowledgements to recieved data
+  pinmode(CAN0_INT, INPUT);
 
   delay(500);
 
@@ -147,7 +156,6 @@ void setup() {
 void loop() {
 
   //logFile = SD.open(finalFileName, FILE_WRITE);
-  tCAN message;
   if (millis() - accumulator > deltaTime){
     valueRL = analogRead(RLSensorIn);
     valueRR = analogRead(RRSensorIn); 
@@ -176,21 +184,21 @@ void loop() {
     
   }
 
-  if (mcp2515_check_message()) {
-    if (mcp2515_get_message(&message)) {
+  if (!digitalRead(CAN0_INT)) {
+    CAN0.readMsgBuf(&rxId, &len, rxBuf)
 
       String dataLine = "";
       
       payload outgoing;
 
-      switch (message.id) {
+      switch (rxId & 0x1FFFFFFF) {
 
         case MESSAGE_ONE: {
 
             //dataLine = "RPM_LOAD_THROTTLE_COOLANT, ";
             // log rpm
-            uint16_t rawRPM = (uint16_t)message.data[0] << 8;
-            rawRPM |= message.data[1];
+            uint16_t rawRPM = (uint16_t)rxBuf[0] << 8;
+            rawRPM |= rxBuf[1];
             rpm = rawRPM * RPM_SCALE;
             //dataLine = dataLine + rpm + ", ";
 
@@ -199,8 +207,8 @@ void loop() {
             Display.sendPayload(outgoing, 0x30);
 
             //log engine load
-            uint16_t rawLoad = (uint16_t)message.data[2] << 8;
-            rawLoad |= message.data[3];
+            uint16_t rawLoad = (uint16_t)rxBuf[2] << 8;
+            rawLoad |= rxBuf[3];
             load = 100.0 - (rawLoad * ENG_LOAD_SCALE);
             //dataLine = dataLine + load + ", ";
 
@@ -209,8 +217,8 @@ void loop() {
             //Display.sendPayload(outgoing, 0x31);
 
             //log throttle position
-            uint16_t rawThrottle = (uint16_t)message.data[4] << 8;
-            rawThrottle |= message.data[5];
+            uint16_t rawThrottle = (uint16_t)rxBuf[4] << 8;
+            rawThrottle |= rxBuf[5];
             throttle = rawThrottle * ENG_THROTTLE_SCALE;
             //dataLine = dataLine + throttle + ", ";
 
@@ -219,7 +227,7 @@ void loop() {
             //Display.sendPayload(outgoing, 0x32);
 
             //log coolant temp
-            int8_t coolantC = message.data[7];
+            int8_t coolantC = rxBuf[7];
             coolantF = ((double)coolantC * 1.8) + 32;
             //dataLine = dataLine + coolantF + ", ";
 
@@ -239,15 +247,15 @@ void loop() {
         case MESSAGE_FOUR: {
             //dataLine = "O2_SPEED_GEAR_VOLTAGE, ";
             //log O2
-            uint8_t rawo2 = (uint8_t)message.data[0];
+            uint8_t rawo2 = (uint8_t)rxBuf[0];
             o2 = rawo2 * O2_SCALE + 0.5;
             //dataLine = dataLine + o2 +  ", ";
 
             outgoing.floatData = o2;
             XBee.sendPayloadTimestamp(outgoing, 0x34);
 
-            uint16_t rawSpeed = (uint16_t)message.data[2] << 8;
-            rawSpeed |= message.data[3];
+            uint16_t rawSpeed = (uint16_t)rxBuf[2] << 8;
+            rawSpeed |= rxBuf[3];
             vehicleSpeed = rawSpeed * SPEED_SCALE;
             //dataLine = dataLine + vehicleSpeed + ", ";
 
@@ -255,14 +263,14 @@ void loop() {
             XBee.sendPayloadTimestamp(outgoing, 0x35);
             //Display.sendPayload(outgoing, 0x35);
 
-            gear = message.data[4];
+            gear = rxBuf[4];
             //dataLine = dataLine + gear + ", ";
 
             XBee.sendByteTimestamp(gear, 0x36);
             //Display.sendByte(gear, 0x36);
 
-            uint16_t rawVolts = (uint16_t)message.data[7] << 8;
-            rawVolts |= message.data[8];
+            uint16_t rawVolts = (uint16_t)rxBuf[7] << 8;
+            rawVolts |= rxBuf[8];
             volts = rawVolts * BATT_VOLTAGE_SCALE;
             //dataLine = dataLine + volts + ", ";
 
@@ -289,10 +297,6 @@ void loop() {
           
       }
     }
-    else {
-      //Serial.println("No data");
-    }   
-  }
   //logFile.close();
 }
 
