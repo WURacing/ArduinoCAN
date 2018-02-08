@@ -7,7 +7,7 @@
 
 void send_packet(FILE *xbee, void *packet, size_t len)
 {
-    uint16_t *p = static_cast<uint16_t *>(packet);
+    uint8_t *p = static_cast<uint8_t *>(packet);
     for (size_t i = 0; i < len; i++) {
         fputc(*(p+i), xbee);
     }
