@@ -61,6 +61,8 @@ void initIO()
     softuart_init();
     sei();
     gps = new Adafruit_GPS(&softuart_io);
+    gps->latitude_fixed = 0;
+    gps->longitude_fixed = 0;
     softuart_add_callback(&readGPSint);
 
     // bring ADC online
@@ -80,11 +82,13 @@ void loop()
     packet.back_brake = htons(adc2);
     packet.front_brake = htons(adc5);
 
-    if (gps->newNMEAreceived() && gps->parse(gps->lastNMEA())) {
-        packet.lat_deg = gps->latitude_fixed;
-        packet.long_deg = gps->longitude_fixed;
+    if (gps->newNMEAreceived()) {
+        gps->parse(gps->lastNMEA());
+        packet.lat_deg = htonl(gps->latitude_fixed);
+        packet.long_deg = htonl(gps->longitude_fixed);
+        printf("%ld %ld\n", gps->latitude_fixed / 10000000, gps->longitude_fixed / 100000000);
     }
-    packet.timestamp = htonll(gps->day * 86400000 + gps->hour * 3600000 + gps->minute * 60000 + gps->seconds * 1000 + gps->milliseconds);
+    packet.timestamp = htonl(gps->day * 86400000 + gps->hour * 3600000 + gps->minute * 60000 + gps->seconds * 1000 + gps->milliseconds);
 
 #ifdef DEBUG_EN
     printf("Current time is %d:%d:%d.\n", gps->hour, gps->minute, gps->seconds);
