@@ -6,6 +6,7 @@
 #include <string.h>
 #include <stdio.h>
 #include "ecu.h"
+#include "CANBus17.h"
 
 volatile struct ecu_t ecu_values;
 static MCP_CAN *can;
@@ -58,6 +59,7 @@ void parse_can_message(uint32_t id, uint8_t len, uint8_t buf[])
         ecu_values.gear = buf[4];
         // ign timing = buf[5];
         ecu_values.volts_raw = buf[6] << 8 | buf[7];
+        ecu_values.speed_raw = GET_AEMEngine3_VehicleSpeed(buf);
     } else {
         return;
     }
