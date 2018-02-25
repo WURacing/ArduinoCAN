@@ -1,7 +1,7 @@
 #####################################################################
 # simple AVR executable
 #####################################################################
-add_avr_executable(app main.cpp ecu.cpp xbee.cpp)
+add_avr_executable(app main.cpp ecu.cpp xbee.cpp endian.h CANBus17.h)
 
 #####################################################################
 # libraries to link to

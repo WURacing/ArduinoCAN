@@ -84,16 +84,16 @@ void loop()
 
     if (gps->newNMEAreceived()) {
         gps->parse(gps->lastNMEA());
-        packet.lat_deg = htonl(gps->latitude_fixed);
-        packet.long_deg = htonl(gps->longitude_fixed);
-        printf("%ld %ld\n", gps->latitude_fixed / 10000000, gps->longitude_fixed / 100000000);
     }
+    packet.lat_deg = htonl(gps->latitude_fixed);
+    packet.long_deg = htonl(gps->longitude_fixed);
     packet.timestamp = htonl(gps->day * 86400000 + gps->hour * 3600000 + gps->minute * 60000 + gps->seconds * 1000 + gps->milliseconds);
 
 #ifdef DEBUG_EN
     printf("Current time is %d:%d:%d.\n", gps->hour, gps->minute, gps->seconds);
     printf("Car goes %d fast.\n", (int)ecu_values.rpm);
     printf("C0: %d C1: %d C2: %d C5: %d\n", adc0, adc1, adc2, adc5);
+    printf("Currently at %ld %ld\n", gps->latitude_fixed / 10000000, gps->longitude_fixed / 100000000);
 #else
     send_packet(&uart_io, &packet, sizeof(xbee_packet_t));
 #endif
