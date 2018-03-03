@@ -12,6 +12,7 @@
 #include <mcp_can.h>
 #include <SPI.h>
 #include <SoftwareSerial.h>
+#include <Adafruit_GPS.h>
 #include "defaults.h"
 #include "global.h"
 #include "stdlib.h"
@@ -32,7 +33,10 @@ unsigned char rxBuf[8];
 // char msgString[128];
 
 #define CAN0_INT 4
-MCP_CAN CAN0(10)
+MCP_CAN CAN0(10);
+
+SoftwareSerial gps(7, 6);
+Adafruit_GPS GPS(&gps);
 
 
 const int RLSensorIn = A0;
@@ -50,6 +54,7 @@ const int backBrake = A2;
 SoftwareSerial XBee_Serial(rxPinXBee,txPinXBee);
 PacketSender XBee(XBee_Serial, 9600);
 HardwareSender Display = HardwareSender();
+
 
 const float RL_SCALE = 0.07458;
 const float RR_SCALE = 0.07356;
@@ -124,7 +129,27 @@ void setup() {
   }
 
   CAN0.setMode(MCP_NORMAL); // send acknowledgements to recieved data
-  pinmode(CAN0_INT, INPUT);
+  pinMode(CAN0_INT, INPUT);
+
+  GPS.begin(9600);
+  
+  // uncomment this line to turn on RMC (recommended minimum) and GGA (fix data) including altitude
+  GPS.sendCommand(PMTK_SET_NMEA_OUTPUT_RMCGGA);
+  // uncomment this line to turn on only the "minimum recommended" data
+  //GPS.sendCommand(PMTK_SET_NMEA_OUTPUT_RMCONLY);
+  // For parsing data, we don't suggest using anything but either RMC only or RMC+GGA since
+  // the parser doesn't care about other sentences at this time
+  
+  // Set the update rate
+  GPS.sendCommand(PMTK_SET_NMEA_UPDATE_5HZ);   // 1 Hz update rate
+  // For the parsing code to work nicely and have time to sort thru the data, and
+  // print it out we don't suggest using anything higher than 1 Hz
+
+  // Request updates on antenna status, comment out to keep quiet
+  GPS.sendCommand(PGCMD_ANTENNA);
+
+  OCR0A = 0xAF;
+  TIMSK0 |= _BV(OCIE0A);
 
   delay(500);
 
@@ -153,8 +178,36 @@ void setup() {
 
 }
 
-void loop() {
+SIGNAL(TIMER0_COMPA_vect) {
+  char c = GPS.read();
+}
 
+void loop() {
+//  char c = GPS.read();
+//  Serial.write(c);
+  if (GPS.newNMEAreceived()) {
+    // a tricky thing here is if we print the NMEA sentence, or data
+    // we end up not listening and catching other sentences! 
+    // so be very wary if using OUTPUT_ALLDATA and trytng to print out data
+    //Serial.println(GPS.lastNMEA());   // this also sets the newNMEAreceived() flag to false
+    payload outgoing;
+    if (!GPS.parse(GPS.lastNMEA())) {
+      outgoing.intData = 0;
+      XBee.sendPayloadTimestamp(outgoing, 0x42);
+      Display.sendPayloadTimestamp(outgoing, 0x42);
+      outgoing.intData = 0;
+      XBee.sendPayloadTimestamp(outgoing, 0x43);
+      Display.sendPayloadTimestamp(outgoing, 0x43);
+    } else {
+      outgoing.intData = GPS.latitude_fixed;
+      XBee.sendPayloadTimestamp(outgoing, 0x42);
+      Display.sendPayloadTimestamp(outgoing, 0x42);
+      outgoing.intData = GPS.longitude_fixed;
+      XBee.sendPayloadTimestamp(outgoing, 0x43);
+      Display.sendPayloadTimestamp(outgoing, 0x43);
+    }
+  }
+  
   //logFile = SD.open(finalFileName, FILE_WRITE);
   if (millis() - accumulator > deltaTime){
     valueRL = analogRead(RLSensorIn);
@@ -185,7 +238,7 @@ void loop() {
   }
 
   if (!digitalRead(CAN0_INT)) {
-    CAN0.readMsgBuf(&rxId, &len, rxBuf)
+    CAN0.readMsgBuf(&rxId, &len, rxBuf);
 
       String dataLine = "";
       
